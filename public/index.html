@@ -317,8 +317,16 @@
   $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
   $('nameInput').value = myName;
 
+  // Prénom déjà connu (refresh, nouvel onglet) : on rejoint sans repasser
+  // par l'écran d'inscription
+  if (myName) {
+    $('waitTitle').textContent = 'Bienvenue, ' + myName + ' !';
+    $('waitMsg').textContent = 'Connexion…';
+    show('s-wait');
+  }
+
   // Reconnexion automatique (4G instable, écran verrouillé…)
-  socket.on('connect', () => { if (joined && myName) join(myName); });
+  socket.on('connect', () => { if (myName) join(myName); });
 
   socket.on('state', s => {
     const newQuestion = state && (s.index !== state.index || (s.phase === 'question' && state.phase !== 'question'));

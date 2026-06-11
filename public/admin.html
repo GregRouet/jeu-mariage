@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Régie — Le Jeu des Mariés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f1e6;
+    --paper-deep: #ede5d2;
+    --ink: #2c3526;
+    --ink-soft: #5d6452;
+    --gold: #a8853c;
+    --gold-soft: #c9ab6e;
+    --blush: #b06a52;
+    --line: #cfc4ab;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Jost', sans-serif; background: var(--paper); color: var(--ink);
+    min-height: 100vh;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .45;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  header { text-align: center; margin-bottom: 26px; }
+  .eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .42em; text-indent: .42em; text-transform: uppercase; color: var(--ink-soft); }
+  h1 { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 34px; margin-top: 4px; }
+  h1 em { color: var(--gold); }
+
+  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: rgba(255,253,247,.7); border: 1px solid var(--line);
+    box-shadow: 0 0 0 4px var(--paper), 0 0 0 5px var(--line);
+    padding: 20px; margin-bottom: 18px;
+  }
+  .panel h3 {
+    font-size: 11px; font-weight: 600; letter-spacing: .3em; text-indent: .3em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h3::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+  input[type=text], input[type=password] {
+    width: 100%; font-family: 'Jost'; font-size: 15px; color: var(--ink);
+    background: rgba(255,255,255,.5); border: 1px solid var(--line);
+    padding: 9px 12px; outline: none;
+  }
+  input:focus { border-color: var(--gold); }
+  .row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .row > div { flex: 1; }
+
+  .btn {
+    font-family: 'Jost'; font-size: 12px; font-weight: 600;
+    letter-spacing: .22em; text-indent: .22em; text-transform: uppercase;
+    color: var(--paper); background: var(--ink); border: 1px solid var(--ink);
+    padding: 11px 18px; cursor: pointer; transition: opacity .2s, transform .1s;
+  }
+  .btn:hover { opacity: .9; }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .btn.gold { background: var(--gold); border-color: var(--gold); }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.danger { background: transparent; color: var(--blush); border-color: var(--blush); }
+  .btn.big { width: 100%; padding: 16px; font-size: 14px; }
+
+  .status { font-size: 13px; color: var(--ink-soft); margin-top: 8px; min-height: 18px; }
+  .status.ok { color: var(--gold); }
+  .status.err { color: var(--blush); }
+
+  /* Déroulé */
+  .stage-q {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 24px;
+    line-height: 1.3; text-align: center; margin: 10px 0 18px; min-height: 32px;
+  }
+  .stage-num { text-align: center; font-size: 11px; letter-spacing: .35em; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+  .answered-count { text-align: center; font-size: 15px; margin-bottom: 16px; color: var(--ink-soft); }
+  .answered-count b { font-size: 22px; color: var(--ink); font-family: 'Cormorant Garamond', serif; }
+
+  .reveal-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .reveal-btns .btn { flex: 1; min-width: 120px; }
+
+  .dist { margin: 14px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+  .dist-row { display: grid; grid-template-columns: 110px 1fr 60px; gap: 10px; align-items: center; font-size: 13px; }
+  .dist-row .lbl { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dist-row.correct .lbl { color: var(--gold); font-weight: 600; }
+  .dist-track { height: 9px; background: var(--paper-deep); border: 1px solid var(--line); }
+  .dist-fill { height: 100%; background: var(--ink-soft); transition: width .5s; }
+  .dist-row.correct .dist-fill { background: var(--gold); }
+
+  /* Listes */
+  ol.qlist, ul.plist { list-style: none; max-height: 320px; overflow-y: auto; }
+  .qlist li {
+    display: grid; grid-template-columns: 26px 1fr auto 22px; gap: 8px;
+    padding: 7px 8px; font-size: 13px; border-bottom: 1px dashed var(--line); align-items: baseline;
+  }
+  .qdel {
+    background: none; border: none; cursor: pointer; color: var(--blush);
+    font-size: 14px; line-height: 1; padding: 2px; opacity: .5; transition: opacity .15s;
+  }
+  .qdel:hover { opacity: 1; }
+  select {
+    font-family: 'Jost'; font-size: 13px; color: var(--ink);
+    background: rgba(255,255,255,.5); border: 1px solid var(--line); padding: 9px 8px; outline: none;
+  }
+  .qlist li.done { opacity: .45; }
+  .qlist li.now { background: rgba(168,133,60,.12); outline: 1px solid var(--gold-soft); }
+  .qlist .qi { font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--ink-soft); }
+  .chip {
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 2px 8px; border: 1px solid var(--gold-soft); color: var(--gold); white-space: nowrap;
+  }
+  .chip.live { border-color: var(--blush); color: var(--blush); }
+
+  .plist li {
+    display: grid; grid-template-columns: 14px 1fr auto; gap: 10px;
+    padding: 7px 8px; font-size: 14px; border-bottom: 1px dashed var(--line); align-items: center;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .dot.on { background: var(--gold); box-shadow: 0 0 6px var(--gold-soft); }
+  .plist .pts { font-weight: 600; font-size: 13px; }
+
+  /* QR */
+  .qr-zone { text-align: center; }
+  #qrcode { display: inline-block; padding: 12px; background: #fff; border: 1px solid var(--line); margin: 10px 0; }
+  #qrcode img, #qrcode canvas { display: block; }
+  .url { font-size: 13px; color: var(--ink-soft); word-break: break-all; }
+
+  /* Login */
+  #login {
+    position: fixed; inset: 0; z-index: 10; background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #login .box { width: min(360px, 88vw); text-align: center; }
+  #login h2 { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 28px; margin-bottom: 18px; }
+  #login input { text-align: center; margin-bottom: 14px; }
+
+  .hidden { display: none !important; }
+  .muted { color: var(--ink-soft); font-size: 13px; text-align: center; padding: 10px 0; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="box">
+    <div class="eyebrow">✦ Régie ✦</div>
+    <h2>Le Jeu des Mariés</h2>
+    <input type="password" id="pwd" placeholder="Mot de passe admin">
+    <button class="btn big gold" id="loginBtn">Entrer</button>
+    <div class="status err" id="loginErr"></div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="app">
+  <header>
+    <div class="eyebrow">Régie du jeu</div>
+    <h1 id="title">… <em>&amp;</em> …</h1>
+  </header>
+
+  <div class="grid">
+    <div><!-- Colonne gauche : contrôle -->
+
+      <div class="panel">
+        <h3>Déroulé</h3>
+        <div id="stage"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Réglages</h3>
+        <div class="row">
+          <div><label>Marié·e 1</label><input type="text" id="nameA" maxlength="24"></div>
+          <div><label>Marié·e 2</label><input type="text" id="nameB" maxlength="24"></div>
+        </div>
+        <button class="btn ghost" id="saveCouple">Enregistrer les prénoms</button>
+        <div class="status" id="coupleStatus"></div>
+        <hr style="border:none;border-top:1px dashed var(--line);margin:16px 0">
+        <label>Fichier de questions (.xlsx — colonne A : question, colonne B : réponse ou vide)</label>
+        <div class="row" style="margin-top:6px">
+          <input type="file" id="file" accept=".xlsx,.xls,.csv" style="flex:1;font-size:13px">
+          <button class="btn ghost" id="uploadBtn">Importer</button>
+        </div>
+        <div class="status" id="uploadStatus"></div>
+        <label style="margin-top:10px">…ou lien Google Sheets (partagé « tous les utilisateurs disposant du lien »)</label>
+        <div class="row" style="margin-top:6px">
+          <input type="text" id="gsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1">
+          <button class="btn ghost" id="gsheetBtn">Importer</button>
+        </div>
+        <div class="status" id="gsheetStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Questions <span id="qcount" style="letter-spacing:0;text-indent:0"></span></h3>
+        <ol class="qlist" id="qlist"><div class="muted">Aucune question importée</div></ol>
+        <div class="row" style="margin-top:14px;margin-bottom:0">
+          <input type="text" id="newQText" placeholder="Nouvelle question…" maxlength="200" style="flex:2">
+          <select id="newQAnswer">
+            <option value="a" id="optA"></option>
+            <option value="b" id="optB"></option>
+            <option value="both">Les deux</option>
+            <option value="">En direct</option>
+          </select>
+          <button class="btn ghost" id="addQBtn">Ajouter</button>
+        </div>
+        <div class="status" id="addQStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Zone sensible</h3>
+        <button class="btn danger" id="resetBtn">Recommencer la partie (scores à zéro)</button>
+      </div>
+    </div>
+
+    <div><!-- Colonne droite : invités -->
+      <div class="panel qr-zone">
+        <h3>Accès invités</h3>
+        <div id="qrcode"></div>
+        <div class="url" id="url"></div>
+        <div class="url" style="margin-top:10px">Classement à projeter : <a href="/classement" target="_blank" style="color:var(--gold)">/classement</a></div>
+      </div>
+
+      <div class="panel">
+        <h3>Invités — <span id="pcount" style="letter-spacing:0;text-indent:0">0</span></h3>
+        <ul class="plist" id="plist"><div class="muted">Personne pour l'instant</div></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let state = null;
+  let password = sessionStorage.getItem('jm_admin_pwd') || '';
+  const socket = io();
+
+  function login(pwd) {
+    socket.emit('admin:login', pwd, res => {
+      if (res.error) {
+        sessionStorage.removeItem('jm_admin_pwd');
+        $('loginErr').textContent = res.error;
+        $('login').classList.remove('hidden');
+        return;
+      }
+      password = pwd;
+      sessionStorage.setItem('jm_admin_pwd', pwd);
+      $('login').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      state = res.state;
+      initStatic();
+      render();
+    });
+  }
+
+  $('loginBtn').onclick = () => login($('pwd').value);
+  $('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pwd').value); });
+  socket.on('connect', () => { if (password) login(password); });
+  socket.on('state', s => { state = s; render(); });
+
+  let staticDone = false;
+  function initStatic() {
+    if (staticDone) return;
+    staticDone = true;
+    const url = location.origin + '/';
+    $('url').textContent = url;
+    new QRCode($('qrcode'), { text: url, width: 160, height: 160, colorDark: '#2c3526', colorLight: '#ffffff' });
+    $('nameA').value = state.couple.a;
+    $('nameB').value = state.couple.b;
+  }
+
+  // --- Réglages ---
+  $('saveCouple').onclick = () => {
+    socket.emit('admin:couple', { a: $('nameA').value, b: $('nameB').value });
+    flash($('coupleStatus'), 'Prénoms enregistrés ✦', 'ok');
+  };
+
+  $('uploadBtn').onclick = async () => {
+    const f = $('file').files[0];
+    if (!f) { flash($('uploadStatus'), 'Choisis un fichier d’abord', 'err'); return; }
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('password', password);
+    try {
+      const r = await fetch('/admin/upload', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (j.ok) flash($('uploadStatus'), j.count + ' questions importées ✦', 'ok');
+      else flash($('uploadStatus'), j.error || 'Erreur', 'err');
+    } catch (e) {
+      flash($('uploadStatus'), 'Erreur réseau : ' + e.message, 'err');
+    }
+  };
+
+  $('gsheetBtn').onclick = async () => {
+    const url = $('gsheetUrl').value.trim();
+    if (!url) { flash($('gsheetStatus'), 'Colle d’abord le lien du Google Sheet', 'err'); return; }
+    flash($('gsheetStatus'), 'Import en cours…', '');
+    try {
+      const r = await fetch('/admin/import-gsheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, password }),
+      });
+      const j = await r.json();
+      if (j.ok) flash($('gsheetStatus'), j.count + ' questions importées ✦', 'ok');
+      else flash($('gsheetStatus'), j.error || 'Erreur', 'err');
+    } catch (e) {
+      flash($('gsheetStatus'), 'Erreur réseau : ' + e.message, 'err');
+    }
+  };
+
+  $('resetBtn').onclick = () => {
+    if (confirm('Remettre tous les scores à zéro et revenir au début ?')) socket.emit('admin:reset');
+  };
+
+  function flash(el, msg, cls) { el.textContent = msg; el.className = 'status ' + cls; }
+
+  // --- Rendu ---
+  function render() {
+    if (!state) return;
+    $('title').innerHTML = esc(state.couple.a) + ' <em>&amp;</em> ' + esc(state.couple.b);
+    renderStage();
+    renderQuestions();
+    renderPlayers();
+  }
+
+  function renderStage() {
+    const el = $('stage');
+    const { phase, index, total, question, couple } = state;
+    const next = '<button class="btn big gold" onclick="socket.emit(\'admin:next\')"' +
+      (index + 1 >= total ? ' disabled' : '') + '>' +
+      (index < 0 ? 'Lancer la première question' : 'Question suivante (' + (index + 2) + '/' + total + ')') +
+      '</button>';
+
+    if (phase === 'lobby') {
+      el.innerHTML = '<p class="muted">' + (total ? total + ' questions prêtes — ' + state.playerCount + ' invités connectés' : 'Importe d’abord le fichier de questions ci-dessous') + '</p>' +
+        (total ? next : '');
+
+    } else if (phase === 'question') {
+      const q = state.questions[index];
+      const auto = q && q.answer;
+      el.innerHTML =
+        '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — en cours</div>' +
+        '<div class="stage-q">' + esc(question) + '</div>' +
+        '<div class="answered-count"><b>' + state.answered + '</b> / ' + state.playerCount + ' réponses reçues</div>' +
+        (auto
+          ? '<button class="btn big gold" onclick="socket.emit(\'admin:reveal\')">Révéler la réponse (' + esc(answerLabel(q.answer)) + ')</button>'
+          : '<p class="muted">Réponse en direct — clique sur la bonne réponse pour clôturer :</p>' +
+            '<div class="reveal-btns">' +
+            '<button class="btn" onclick="reveal(\'a\')">' + esc(couple.a) + '</button>' +
+            '<button class="btn" onclick="reveal(\'b\')">' + esc(couple.b) + '</button>' +
+            '<button class="btn" onclick="reveal(\'both\')">Les deux</button></div>');
+
+    } else if (phase === 'reveal') {
+      el.innerHTML =
+        '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — réponse : ' + esc(answerLabel(state.correct)) + '</div>' +
+        '<div class="stage-q">' + esc(question) + '</div>' +
+        distHtml() +
+        (index + 1 >= total
+          ? '<button class="btn big gold" onclick="socket.emit(\'admin:end\')">Afficher les résultats finaux 🏆</button>'
+          : next);
+
+    } else if (phase === 'ended') {
+      el.innerHTML = '<p class="muted">Partie terminée — les invités voient le podium ✦</p>';
+    }
+  }
+
+  function reveal(c) { socket.emit('admin:reveal', c); }
+
+  function distHtml() {
+    const c = state.counts || { a: 0, b: 0, both: 0 };
+    const total = Math.max(1, c.a + c.b + c.both);
+    return '<div class="dist">' + [['a', state.couple.a], ['b', state.couple.b], ['both', 'Les deux']].map(([k, lbl]) => {
+      const pct = Math.round(100 * c[k] / total);
+      return '<div class="dist-row' + (k === state.correct ? ' correct' : '') + '">' +
+        '<span class="lbl">' + esc(lbl) + '</span>' +
+        '<span class="dist-track"><span class="dist-fill" style="width:' + pct + '%"></span></span>' +
+        '<span>' + c[k] + ' (' + pct + '%)</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function answerLabel(a) {
+    return a === 'a' ? state.couple.a : a === 'b' ? state.couple.b : a === 'both' ? 'Les deux' : '';
+  }
+
+  function renderQuestions() {
+    const qs = state.questions || [];
+    $('qcount').textContent = qs.length ? '— ' + qs.length : '';
+    if (!qs.length) { $('qlist').innerHTML = '<div class="muted">Aucune question importée</div>'; return; }
+    $('qlist').innerHTML = qs.map((q, i) =>
+      '<li class="' + (i < state.index ? 'done' : i === state.index ? 'now' : '') + '">' +
+      '<span class="qi">' + (i + 1) + '</span><span>' + esc(q.text) + '</span>' +
+      '<span class="chip' + (q.answer ? '' : ' live') + '">' + (q.answer ? esc(answerLabel(q.answer)) : 'en direct') + '</span>' +
+      (i > state.index ? '<button class="qdel" title="Supprimer" onclick="delQ(' + i + ')">✕</button>' : '<span></span>') +
+      '</li>'
+    ).join('');
+    $('optA').textContent = state.couple.a;
+    $('optB').textContent = state.couple.b;
+  }
+
+  function delQ(i) {
+    const q = state.questions[i];
+    if (q && confirm('Supprimer la question « ' + q.text + ' » ?')) socket.emit('admin:deleteQuestion', i);
+  }
+
+  $('addQBtn').onclick = () => {
+    const text = $('newQText').value.trim();
+    if (!text) { flash($('addQStatus'), 'Écris d’abord la question', 'err'); return; }
+    socket.emit('admin:addQuestion', { text, answer: $('newQAnswer').value });
+    $('newQText').value = '';
+    flash($('addQStatus'), 'Question ajoutée en fin de liste ✦', 'ok');
+  };
+  $('newQText').addEventListener('keydown', e => { if (e.key === 'Enter') $('addQBtn').click(); });
+
+  function renderPlayers() {
+    const ps = state.players || [];
+    $('pcount').textContent = ps.length;
+    if (!ps.length) { $('plist').innerHTML = '<div class="muted">Personne pour l’instant</div>'; return; }
+    $('plist').innerHTML = ps.map(p =>
+      '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
+      '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') + '</span></li>'
+    ).join('');
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+</script>
+</body>
+</html>

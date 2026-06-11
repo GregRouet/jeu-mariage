@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Le Jeu des Mariés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f1e6;
+    --paper-deep: #ede5d2;
+    --ink: #2c3526;
+    --ink-soft: #5d6452;
+    --gold: #a8853c;
+    --gold-soft: #c9ab6e;
+    --blush: #b06a52;
+    --line: #cfc4ab;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { height: 100%; }
+  body {
+    min-height: 100%;
+    font-family: 'Jost', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+  /* Atmosphère : halo champagne + grain papier */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(120% 60% at 50% -10%, rgba(201,171,110,.28), transparent 60%),
+      radial-gradient(80% 50% at 50% 115%, rgba(176,106,82,.12), transparent 60%);
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 480px; margin: 0 auto;
+    padding: 32px 22px 48px;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+
+  /* ----- En-tête faire-part ----- */
+  header { text-align: center; margin-bottom: 30px; animation: rise .8s ease both; }
+  .rule {
+    display: flex; align-items: center; gap: 12px; justify-content: center;
+    color: var(--gold); margin-bottom: 14px;
+  }
+  .rule::before, .rule::after {
+    content: ''; height: 1px; flex: 1; max-width: 90px;
+    background: linear-gradient(to var(--dir, right), transparent, var(--gold-soft));
+  }
+  .rule::before { --dir: right; }
+  .rule::after  { --dir: left; }
+  .rule span { font-size: 11px; letter-spacing: .1em; }
+  .eyebrow {
+    font-size: 11px; font-weight: 500; letter-spacing: .42em; text-indent: .42em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .names {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500;
+    font-size: clamp(30px, 9vw, 40px); margin-top: 8px; line-height: 1.1;
+  }
+  .names em { font-style: italic; color: var(--gold); padding: 0 .12em; }
+
+  /* ----- Écrans ----- */
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.on { display: flex; animation: rise .6s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  .card {
+    background: rgba(255,253,247,.65);
+    border: 1px solid var(--line);
+    box-shadow: 0 0 0 4px var(--paper), 0 0 0 5px var(--line), 0 18px 40px -24px rgba(44,53,38,.35);
+    padding: 30px 24px; text-align: center;
+  }
+  .card h2 {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600;
+    font-size: 24px; margin-bottom: 6px;
+  }
+  .hint { color: var(--ink-soft); font-size: 14px; font-weight: 300; }
+
+  input[type=text] {
+    width: 100%; margin: 26px 0 8px;
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 28px; text-align: center; color: var(--ink);
+    background: transparent; border: none; border-bottom: 1px solid var(--gold-soft);
+    padding: 6px 4px; outline: none; transition: border-color .25s;
+  }
+  input[type=text]:focus { border-bottom-color: var(--gold); }
+  input::placeholder { color: #b3ab93; }
+
+  .btn {
+    display: block; width: 100%; margin-top: 22px;
+    font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 600;
+    letter-spacing: .3em; text-indent: .3em; text-transform: uppercase;
+    color: var(--paper); background: var(--ink);
+    border: 1px solid var(--ink); padding: 16px 10px; cursor: pointer;
+    transition: transform .12s ease, background .2s;
+  }
+  .btn:active { transform: scale(.97); }
+  .err { color: var(--blush); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+  /* ----- Attente ----- */
+  .pulse {
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 20px; color: var(--ink-soft); margin-top: 14px;
+  }
+  .diamond { color: var(--gold); display: inline-block; animation: spin 5s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .count { margin-top: 26px; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+
+  /* ----- Question ----- */
+  .qnum {
+    text-align: center; font-size: 11px; font-weight: 500;
+    letter-spacing: .4em; text-indent: .4em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 14px;
+  }
+  .qtext {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600;
+    font-size: clamp(24px, 6.5vw, 30px); line-height: 1.25;
+    text-align: center; margin-bottom: 30px; text-wrap: balance;
+  }
+  .choices { display: flex; flex-direction: column; gap: 14px; }
+  .choice {
+    position: relative;
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500;
+    font-size: 26px; color: var(--ink);
+    background: rgba(255,253,247,.7);
+    border: 1px solid var(--ink);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--line);
+    padding: 20px 14px; cursor: pointer; text-align: center;
+    transition: transform .12s ease, background .25s, color .25s, opacity .3s;
+  }
+  .choice:active { transform: scale(.97); }
+  .choice.sel {
+    background: var(--ink); color: var(--paper);
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 4px var(--gold);
+  }
+  .choice.dim { opacity: .35; pointer-events: none; }
+  .choice.good {
+    background: var(--ink); color: var(--paper); opacity: 1;
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 4px var(--gold), 0 0 24px -6px var(--gold);
+  }
+  .choice:disabled { cursor: default; }
+  .locked {
+    text-align: center; margin-top: 22px; font-size: 12px;
+    letter-spacing: .25em; text-transform: uppercase; color: var(--gold);
+    animation: rise .4s ease both;
+  }
+
+  /* ----- Révélation ----- */
+  .verdict {
+    text-align: center; font-family: 'Cormorant Garamond', serif;
+    font-size: 30px; font-weight: 600; margin-bottom: 4px;
+  }
+  .verdict.ok { color: var(--ink); }
+  .verdict.ko { color: var(--blush); }
+  .verdict-sub { text-align: center; color: var(--ink-soft); font-size: 14px; margin-bottom: 24px; }
+  .verdict-sub b { color: var(--gold); font-weight: 600; }
+
+  .bars { margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: grid; grid-template-columns: 92px 1fr 36px; align-items: center; gap: 10px; font-size: 13px; }
+  .bar-row .lbl { text-align: right; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row.correct .lbl { color: var(--gold); font-weight: 600; }
+  .bar-track { height: 10px; background: var(--paper-deep); border: 1px solid var(--line); }
+  .bar-fill { height: 100%; width: 0; background: var(--ink-soft); transition: width .9s cubic-bezier(.2,.7,.2,1); }
+  .bar-row.correct .bar-fill { background: var(--gold); }
+  .bar-row .pct { color: var(--ink-soft); font-size: 12px; }
+
+  /* ----- Classement ----- */
+  .lb-title {
+    display: flex; align-items: center; gap: 12px; margin: 8px 0 14px;
+    font-size: 11px; font-weight: 600; letter-spacing: .35em; text-indent: .35em;
+    text-transform: uppercase; color: var(--ink-soft); justify-content: center;
+  }
+  .lb-title::before, .lb-title::after { content: '✦'; color: var(--gold); font-size: 9px; }
+  .lb { list-style: none; }
+  .lb li {
+    display: grid; grid-template-columns: 30px 1fr auto; gap: 10px;
+    padding: 9px 12px; font-size: 15px; align-items: baseline;
+    border-bottom: 1px dashed var(--line);
+  }
+  .lb li .rank { font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--ink-soft); }
+  .lb li.top .rank { color: var(--gold); font-weight: 700; }
+  .lb li.me { background: rgba(168,133,60,.12); outline: 1px solid var(--gold-soft); }
+  .lb li .pts { font-weight: 600; }
+  .lb li .pts small { font-weight: 300; color: var(--ink-soft); }
+
+  /* ----- Podium final ----- */
+  .podium { display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin: 18px 0 30px; }
+  .pod { text-align: center; flex: 1; max-width: 110px; animation: rise .7s ease both; }
+  .pod .pname {
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 17px; margin-bottom: 6px; word-break: break-word;
+  }
+  .pod .block {
+    background: var(--ink); color: var(--gold-soft);
+    display: flex; flex-direction: column; justify-content: center;
+    border-top: 3px solid var(--gold);
+    font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 700;
+  }
+  .pod small { display: block; font-family: 'Jost'; font-size: 10px; letter-spacing: .2em; color: var(--paper); font-weight: 400; }
+  .pod.p1 .block { height: 96px; } .pod.p2 .block { height: 72px; } .pod.p3 .block { height: 54px; }
+  .pod.p1 { animation-delay: .25s; } .pod.p2 { animation-delay: .1s; } .pod.p3 { animation-delay: .4s; }
+  .pod.p1 .pname { font-size: 20px; color: var(--gold); }
+  .crown { font-size: 20px; }
+
+  footer { text-align: center; margin-top: auto; padding-top: 34px; color: var(--gold-soft); font-size: 12px; letter-spacing: .3em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="rule"><span>✦</span></div>
+    <div class="eyebrow">Le jeu des mariés</div>
+    <div class="names" id="coupleNames">… <em>&amp;</em> …</div>
+    <div class="rule"><span>✦</span></div>
+  </header>
+
+  <!-- Inscription -->
+  <section class="screen on" id="s-join">
+    <div class="card">
+      <h2>Bienvenue !</h2>
+      <p class="hint">Entre ton prénom pour rejoindre la partie</p>
+      <input type="text" id="nameInput" placeholder="Ton prénom" maxlength="24" autocomplete="given-name">
+      <button class="btn" id="joinBtn">Entrer dans le jeu</button>
+      <div class="err" id="joinErr"></div>
+    </div>
+  </section>
+
+  <!-- Attente -->
+  <section class="screen" id="s-wait">
+    <div class="card">
+      <h2 id="waitTitle">Bienvenue !</h2>
+      <p class="pulse"><span class="diamond">✦</span> <span id="waitMsg">En attente de la prochaine question…</span> <span class="diamond">✦</span></p>
+      <p class="count"><span id="playerCount">0</span> invités connectés</p>
+    </div>
+  </section>
+
+  <!-- Question -->
+  <section class="screen" id="s-question">
+    <div class="qnum" id="qnum">Question 1</div>
+    <div class="qtext" id="qtext"></div>
+    <div class="choices">
+      <button class="choice" data-choice="a" id="chA"></button>
+      <button class="choice" data-choice="b" id="chB"></button>
+      <button class="choice" data-choice="both">Les deux !</button>
+    </div>
+    <div class="locked" id="lockedMsg" style="display:none">✦ Réponse enregistrée ✦</div>
+  </section>
+
+  <!-- Révélation -->
+  <section class="screen" id="s-reveal">
+    <div class="verdict" id="verdict"></div>
+    <p class="verdict-sub" id="verdictSub"></p>
+    <div class="bars" id="bars"></div>
+    <div class="lb-title">Classement</div>
+    <ol class="lb" id="lbList"></ol>
+  </section>
+
+  <!-- Fin -->
+  <section class="screen" id="s-end">
+    <div class="lb-title">Résultats finaux</div>
+    <div class="podium" id="podium"></div>
+    <ol class="lb" id="lbFinal"></ol>
+  </section>
+
+  <footer>✦ ✦ ✦</footer>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const screens = ['s-join', 's-wait', 's-question', 's-reveal', 's-end'];
+  function show(id) { screens.forEach(s => $(s).classList.toggle('on', s === id)); }
+
+  // Identité persistante : survit au verrouillage du téléphone et au refresh
+  let token = localStorage.getItem('jm_token');
+  if (!token) { token = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('jm_token', token); }
+  let myName = localStorage.getItem('jm_name') || '';
+
+  let state = null;
+  let myChoice = null;     // choix pour la question en cours
+  let myScore = 0;
+  let joined = false;
+
+  const socket = io();
+
+  function join(name) {
+    socket.emit('join', { token, name }, res => {
+      if (res.error) { $('joinErr').textContent = res.error; return; }
+      joined = true;
+      myName = res.you.name;
+      myScore = res.you.score;
+      myChoice = res.you.choice;
+      localStorage.setItem('jm_name', myName);
+      state = res.state;
+      render();
+    });
+  }
+
+  $('joinBtn').onclick = () => {
+    const name = $('nameInput').value.trim();
+    if (!name) { $('joinErr').textContent = 'Indique ton prénom !'; return; }
+    join(name);
+  };
+  $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
+  $('nameInput').value = myName;
+
+  // Reconnexion automatique (4G instable, écran verrouillé…)
+  socket.on('connect', () => { if (joined && myName) join(myName); });
+
+  socket.on('state', s => {
+    const newQuestion = state && (s.index !== state.index || (s.phase === 'question' && state.phase !== 'question'));
+    state = s;
+    if (newQuestion && s.phase === 'question') myChoice = null;
+    render();
+  });
+
+  document.querySelectorAll('.choice').forEach(btn => {
+    btn.onclick = () => {
+      if (!state || state.phase !== 'question' || myChoice) return;
+      myChoice = btn.dataset.choice;
+      socket.emit('answer', myChoice);
+      render();
+    };
+  });
+
+  function render() {
+    if (!state || !joined) return;
+    const { couple } = state;
+    $('coupleNames').innerHTML = esc(couple.a) + ' <em>&amp;</em> ' + esc(couple.b);
+
+    if (state.phase === 'lobby') {
+      $('waitTitle').textContent = 'Bienvenue, ' + myName + ' !';
+      $('waitMsg').textContent = 'En attente de la première question…';
+      $('playerCount').textContent = state.playerCount;
+      show('s-wait');
+
+    } else if (state.phase === 'question') {
+      $('qnum').textContent = 'Question ' + (state.index + 1) + ' / ' + state.total;
+      $('qtext').textContent = state.question;
+      $('chA').textContent = couple.a;
+      $('chB').textContent = couple.b;
+      document.querySelectorAll('.choice').forEach(b => {
+        b.classList.toggle('sel', b.dataset.choice === myChoice);
+        b.classList.toggle('dim', !!myChoice && b.dataset.choice !== myChoice);
+        b.classList.remove('good');
+      });
+      $('lockedMsg').style.display = myChoice ? '' : 'none';
+      show('s-question');
+
+    } else if (state.phase === 'reveal') {
+      const ok = myChoice === state.correct;
+      const label = state.correct === 'both' ? 'Les deux !' : couple[state.correct];
+      if (myChoice) {
+        if (ok) myScoreSync();
+        $('verdict').textContent = ok ? 'Bonne réponse !' : 'Raté…';
+        $('verdict').className = 'verdict ' + (ok ? 'ok' : 'ko');
+        $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>' + (ok ? ' — +1 point ✦' : '');
+      } else {
+        $('verdict').textContent = 'Trop tard !';
+        $('verdict').className = 'verdict ko';
+        $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>';
+      }
+      renderBars();
+      renderLb($('lbList'), state.leaderboard, 8);
+      show('s-reveal');
+
+    } else if (state.phase === 'ended') {
+      renderPodium();
+      renderLb($('lbFinal'), state.leaderboard, 999);
+      show('s-end');
+    }
+  }
+
+  function myScoreSync() {
+    const me = (state.leaderboard || []).find(p => p.name === myName);
+    if (me) myScore = me.score;
+  }
+
+  function renderBars() {
+    const c = state.counts || { a: 0, b: 0, both: 0 };
+    const total = Math.max(1, c.a + c.b + c.both);
+    const rows = [
+      ['a', state.couple.a], ['b', state.couple.b], ['both', 'Les deux'],
+    ].map(([k, lbl]) => {
+      const pct = Math.round(100 * c[k] / total);
+      return '<div class="bar-row' + (k === state.correct ? ' correct' : '') + '">' +
+        '<span class="lbl">' + esc(lbl) + '</span>' +
+        '<span class="bar-track"><span class="bar-fill" data-w="' + pct + '"></span></span>' +
+        '<span class="pct">' + pct + '%</span></div>';
+    }).join('');
+    $('bars').innerHTML = rows;
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      document.querySelectorAll('.bar-fill').forEach(el => el.style.width = el.dataset.w + '%')));
+  }
+
+  function renderLb(el, board, max) {
+    if (!board) { el.innerHTML = ''; return; }
+    const myRank = board.findIndex(p => p.name === myName);
+    let rows = board.slice(0, max).map((p, i) => lbRow(p, i, myRank));
+    if (myRank >= max) rows.push(lbRow(board[myRank], myRank, myRank));
+    el.innerHTML = rows.join('');
+  }
+  function lbRow(p, i, myRank) {
+    return '<li class="' + (i < 3 ? 'top ' : '') + (i === myRank ? 'me' : '') + '">' +
+      '<span class="rank">' + (i + 1) + '</span><span>' + esc(p.name) + '</span>' +
+      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + '</small></span></li>';
+  }
+
+  function renderPodium() {
+    const b = state.leaderboard || [];
+    const pod = (i, cls, crown) => b[i] ?
+      '<div class="pod ' + cls + '">' + (crown ? '<div class="crown">👑</div>' : '') +
+      '<div class="pname">' + esc(b[i].name) + '</div>' +
+      '<div class="block">' + b[i].score + '<small>POINT' + (b[i].score > 1 ? 'S' : '') + '</small></div></div>' : '';
+    $('podium').innerHTML = pod(1, 'p2') + pod(0, 'p1', true) + pod(2, 'p3');
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+</script>
+</body>
+</html>

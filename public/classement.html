@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classement — Le Jeu des Mariés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f1e6;
+    --paper-deep: #ede5d2;
+    --ink: #2c3526;
+    --ink-soft: #5d6452;
+    --gold: #a8853c;
+    --gold-soft: #c9ab6e;
+    --blush: #b06a52;
+    --line: #cfc4ab;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Jost', sans-serif; background: var(--paper); color: var(--ink);
+    min-height: 100vh; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(110% 55% at 50% -8%, rgba(201,171,110,.3), transparent 60%),
+      radial-gradient(80% 50% at 50% 115%, rgba(176,106,82,.1), transparent 60%);
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 40px 24px 140px; }
+
+  header { text-align: center; margin-bottom: 26px; animation: rise .8s ease both; }
+  .rule { display: flex; align-items: center; gap: 14px; justify-content: center; color: var(--gold); margin-bottom: 14px; }
+  .rule::before, .rule::after { content: ''; height: 1px; flex: 1; max-width: 160px; background: var(--gold-soft); }
+  .eyebrow { font-size: 13px; font-weight: 500; letter-spacing: .45em; text-indent: .45em; text-transform: uppercase; color: var(--ink-soft); }
+  .names {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500;
+    font-size: clamp(36px, 6vw, 56px); margin-top: 8px;
+  }
+  .names em { color: var(--gold); padding: 0 .1em; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  .status {
+    text-align: center; margin: 4px 0 34px;
+    font-size: 14px; letter-spacing: .25em; text-indent: .25em; text-transform: uppercase; color: var(--gold);
+    min-height: 20px;
+  }
+  .status .q {
+    display: block; margin-top: 12px; letter-spacing: 0; text-indent: 0; text-transform: none;
+    font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: clamp(20px, 3.4vw, 30px);
+    color: var(--ink); text-wrap: balance;
+  }
+
+  .lb-title {
+    display: flex; align-items: center; gap: 14px; margin: 0 0 18px; justify-content: center;
+    font-size: 13px; font-weight: 600; letter-spacing: .4em; text-indent: .4em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .lb-title::before, .lb-title::after { content: '✦'; color: var(--gold); font-size: 11px; }
+
+  .lb { list-style: none; max-width: 640px; margin: 0 auto; }
+  .lb li {
+    display: grid; grid-template-columns: 52px 1fr auto; gap: 16px; align-items: baseline;
+    padding: 12px 20px; border-bottom: 1px dashed var(--line);
+    font-size: clamp(17px, 2.6vw, 22px);
+    background: transparent;
+    will-change: transform;
+  }
+  .lb li .rank { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.15em; color: var(--ink-soft); }
+  .lb li .pname { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb li .pts { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .lb li .pts small { font-weight: 300; color: var(--ink-soft); font-size: .7em; }
+  .lb li.r1, .lb li.r2, .lb li.r3 { background: rgba(255,253,247,.75); }
+  .lb li.r1 {
+    border: 1px solid var(--gold); border-bottom: 1px solid var(--gold);
+    box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--gold-soft), 0 14px 30px -18px rgba(168,133,60,.6);
+    font-size: clamp(21px, 3.2vw, 27px); margin-bottom: 6px;
+  }
+  .lb li.r1 .rank::before { content: '👑 '; font-style: normal; }
+  .lb li.r1 .rank, .lb li.r1 .pts { color: var(--gold); }
+  .lb li.r2 .rank, .lb li.r3 .rank { color: var(--gold); font-weight: 700; }
+  .more { text-align: center; margin-top: 16px; color: var(--ink-soft); font-size: 14px; font-style: italic; font-family: 'Cormorant Garamond', serif; font-size: 17px; }
+
+  .empty {
+    text-align: center; color: var(--ink-soft); font-family: 'Cormorant Garamond', serif;
+    font-style: italic; font-size: 24px; padding: 40px 0;
+  }
+  .diamond { color: var(--gold); display: inline-block; animation: spin 5s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Carton « rejoindre » */
+  .join {
+    position: fixed; right: 22px; bottom: 22px; z-index: 2;
+    background: rgba(255,253,247,.92); border: 1px solid var(--line);
+    box-shadow: 0 0 0 4px var(--paper), 0 0 0 5px var(--line), 0 18px 40px -22px rgba(44,53,38,.4);
+    padding: 14px; text-align: center;
+  }
+  .join .t { font-size: 10px; font-weight: 600; letter-spacing: .25em; text-indent: .25em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  #qrcode { display: inline-block; padding: 6px; background: #fff; border: 1px solid var(--line); }
+  #qrcode img, #qrcode canvas { display: block; }
+  .join .u { font-size: 11px; color: var(--ink-soft); margin-top: 6px; max-width: 150px; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="rule"><span>✦</span></div>
+    <div class="eyebrow">Le jeu des mariés</div>
+    <div class="names" id="coupleNames">… <em>&amp;</em> …</div>
+    <div class="rule"><span>✦</span></div>
+  </header>
+
+  <div class="status" id="status"></div>
+
+  <div class="lb-title">Classement</div>
+  <ol class="lb" id="lb"></ol>
+  <div class="more" id="more"></div>
+  <div class="empty" id="empty" style="display:none"><span class="diamond">✦</span> En attente des premiers joueurs… <span class="diamond">✦</span></div>
+</div>
+
+<div class="join">
+  <div class="t">Rejoindre</div>
+  <div id="qrcode"></div>
+  <div class="u" id="url"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const MAX_ROWS = 15;
+  let state = null;
+
+  const url = location.origin + '/';
+  $('url').textContent = url.replace(/^https?:\/\//, '');
+  new QRCode($('qrcode'), { text: url, width: 130, height: 130, colorDark: '#2c3526', colorLight: '#ffffff' });
+
+  const socket = io();
+  socket.on('connect', () => socket.emit('board:join', null, s => { state = s; render(); }));
+  socket.on('state', s => { state = s; render(); });
+
+  function render() {
+    if (!state) return;
+    $('coupleNames').innerHTML = esc(state.couple.a) + ' <em>&amp;</em> ' + esc(state.couple.b);
+    renderStatus();
+    renderBoard();
+  }
+
+  function renderStatus() {
+    const { phase, index, total, question, answered, playerCount, correct, couple } = state;
+    let html = '';
+    if (phase === 'lobby') html = playerCount + ' invité' + (playerCount > 1 ? 's' : '') + ' — la partie va bientôt commencer';
+    else if (phase === 'question') html = 'Question ' + (index + 1) + ' / ' + total + ' — ' + answered + ' réponse' + (answered > 1 ? 's' : '') +
+      '<span class="q">' + esc(question) + '</span>';
+    else if (phase === 'reveal') {
+      const lbl = correct === 'both' ? 'Les deux !' : couple[correct];
+      html = 'Question ' + (index + 1) + ' / ' + total + ' — réponse : ' + esc(lbl);
+    }
+    else if (phase === 'ended') html = '✦ Résultats finaux ✦';
+    $('status').innerHTML = html;
+  }
+
+  function renderBoard() {
+    const board = state.leaderboard || [];
+    $('empty').style.display = board.length ? 'none' : '';
+
+    // FLIP : mémoriser la position de chaque ligne avant le re-rendu
+    const before = {};
+    document.querySelectorAll('#lb li').forEach(li => before[li.dataset.name] = li.getBoundingClientRect().top);
+
+    $('lb').innerHTML = board.slice(0, MAX_ROWS).map((p, i) =>
+      '<li class="r' + (i + 1) + '" data-name="' + esc(p.name) + '">' +
+      '<span class="rank">' + (i + 1) + '</span>' +
+      '<span class="pname">' + esc(p.name) + '</span>' +
+      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + '</small></span></li>'
+    ).join('');
+    $('more').textContent = board.length > MAX_ROWS ? '… et ' + (board.length - MAX_ROWS) + ' autres participants' : '';
+
+    // …puis animer le déplacement depuis l'ancienne position
+    document.querySelectorAll('#lb li').forEach(li => {
+      const prev = before[li.dataset.name];
+      if (prev === undefined) return;
+      const delta = prev - li.getBoundingClientRect().top;
+      if (!delta) return;
+      li.style.transform = 'translateY(' + delta + 'px)';
+      li.style.transition = 'none';
+      requestAnimationFrame(() => {
+        li.style.transition = 'transform .6s cubic-bezier(.2,.7,.2,1)';
+        li.style.transform = '';
+      });
+    });
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+</script>
+</body>
+</html>

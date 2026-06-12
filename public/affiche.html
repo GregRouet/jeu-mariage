@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Affiche</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f1e6;
+    --ink: #2c3526;
+    --ink-soft: #5d6452;
+    --gold: #a8853c;
+    --gold-soft: #c9ab6e;
+    --line: #cfc4ab;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: A4 portrait; margin: 0; }
+
+  body { background: #8a8576; font-family: 'Jost', sans-serif; color: var(--ink); }
+
+  /* Barre d'outils (masquée à l'impression) */
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    background: var(--ink); color: var(--paper);
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    padding: 12px; font-size: 13px;
+  }
+  .toolbar button {
+    font-family: 'Jost'; font-size: 12px; font-weight: 600;
+    letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+    color: var(--ink); background: var(--gold-soft); border: none;
+    padding: 9px 22px; cursor: pointer;
+  }
+  .toolbar span { opacity: .75; }
+
+  /* Feuille A4 */
+  .sheet {
+    width: 210mm; height: 297mm;
+    margin: 70px auto 40px;
+    background: var(--paper);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.6);
+    padding: 14mm;
+    display: flex;
+  }
+  .frame {
+    flex: 1;
+    border: 1px solid var(--gold);
+    outline: 1px solid var(--gold-soft);
+    outline-offset: 2mm;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    text-align: center;
+    padding: 16mm 12mm 12mm;
+  }
+
+  .rule { display: flex; align-items: center; gap: 6mm; justify-content: center; color: var(--gold); width: 100%; }
+  .rule::before, .rule::after { content: ''; height: 1px; flex: 1; max-width: 40mm; background: var(--gold-soft); }
+  .rule span { font-size: 14px; }
+
+  .names {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500;
+    font-size: 19mm; line-height: 1.05; margin: 6mm 0 2mm;
+  }
+  .names em { color: var(--gold); padding: 0 .1em; }
+  .tagline {
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 8.5mm; color: var(--ink-soft); margin-bottom: 4mm;
+  }
+
+  .invite {
+    font-size: 4.2mm; font-weight: 500; letter-spacing: .4em; text-indent: .4em;
+    text-transform: uppercase; color: var(--gold); margin: 4mm 0 6mm;
+  }
+
+  .qrbox {
+    padding: 5mm; background: #fff;
+    border: 1px solid var(--ink);
+    box-shadow: 0 0 0 2.5mm var(--paper), 0 0 0 2.8mm var(--gold-soft);
+  }
+  #qrcode img, #qrcode canvas { display: block; width: 78mm !important; height: 78mm !important; }
+
+  .url { margin-top: 6mm; font-size: 4.5mm; color: var(--ink-soft); letter-spacing: .05em; }
+
+  .steps { display: flex; gap: 10mm; justify-content: center; margin-top: 6mm; }
+  .step { width: 42mm; }
+  .step .n {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600;
+    font-size: 9mm; color: var(--gold);
+  }
+  .step .t { font-size: 3.6mm; color: var(--ink); margin-top: 1mm; line-height: 1.35; }
+
+  .foot { color: var(--gold); font-size: 4mm; letter-spacing: .5em; text-indent: .5em; margin-top: 6mm; }
+
+  @media print {
+    body { background: var(--paper); }
+    .toolbar { display: none; }
+    .sheet { margin: 0; box-shadow: none; width: 210mm; height: 297mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span>Aperçu de l'affiche A4 — « Imprimer » puis choisis une imprimante ou « Enregistrer en PDF ». Active « Graphiques d'arrière-plan » pour le fond ivoire.</span>
+  <button onclick="window.print()">Imprimer / PDF</button>
+</div>
+
+<div class="sheet">
+  <div class="frame">
+    <div>
+      <div class="rule"><span>✦</span></div>
+      <div class="names" id="names">… <em>&amp;</em> …</div>
+      <div class="tagline">Qui de nous deux&nbsp;?</div>
+      <div class="rule"><span>✦</span></div>
+    </div>
+
+    <div>
+      <div class="invite">À vos téléphones</div>
+      <div class="qrbox"><div id="qrcode"></div></div>
+      <div class="url" id="url"></div>
+    </div>
+
+    <div>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><div class="t">Scannez le QR code avec votre téléphone</div></div>
+        <div class="step"><div class="n">2</div><div class="t">Entrez votre prénom</div></div>
+        <div class="step"><div class="n">3</div><div class="t">Répondez plus vite que votre voisin de table</div></div>
+      </div>
+      <div class="foot">✦ ✦ ✦</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const url = location.origin + '/';
+  document.getElementById('url').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  new QRCode(document.getElementById('qrcode'), {
+    text: url, width: 560, height: 560,
+    colorDark: '#2c3526', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+
+  const socket = io();
+  socket.on('connect', () => socket.emit('board:join', null, s => {
+    const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+    document.getElementById('names').innerHTML = esc(s.couple.a) + ' <em>&amp;</em> ' + esc(s.couple.b);
+    document.title = 'Affiche — ' + s.couple.a + ' & ' + s.couple.b;
+  }));
+</script>
+</body>
+</html>

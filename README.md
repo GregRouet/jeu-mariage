@@ -12,6 +12,7 @@ npm start
 - **Page invités** : http://localhost:3000/ — chacun entre son prénom et joue.
 - **Régie (admin)** : http://localhost:3000/admin — mot de passe par défaut : `mariage` (changeable via la variable d'environnement `ADMIN_PASSWORD`).
 - **Classement à projeter** : http://localhost:3000/classement — leaderboard en temps réel (question en cours, compteur de réponses, QR code pour rejoindre), idéal sur grand écran.
+- **Affiche A4 à imprimer** : http://localhost:3000/affiche — prénoms + QR code, bouton Imprimer/PDF. ⚠️ À ouvrir depuis l'**URL de production** (le QR encode l'adresse de la page), avec « Graphiques d'arrière-plan » activé à l'impression pour le fond ivoire.
 
 ## Déroulement d'une partie
 

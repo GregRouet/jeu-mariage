@@ -15,6 +15,7 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/classement', (req, res) => res.sendFile(path.join(__dirname, 'public', 'classement.html')));
+app.get('/affiche', (req, res) => res.sendFile(path.join(__dirname, 'public', 'affiche.html')));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 

@@ -54,7 +54,15 @@ Deux formats acceptés, détectés automatiquement (première feuille, une quest
 
 L'import peut se refaire à tout moment (il remet la partie au début).
 
-On peut aussi **ajouter une question à la main** (formulaire sous la liste, ajoutée en fin de liste) ou **en supprimer** (✕ au survol — uniquement les questions pas encore jouées). Attention : ces modifications manuelles sont écrasées par un nouvel import.
+On peut aussi gérer les questions à la main depuis la régie :
+- **Ajouter** une question (formulaire sous la liste, ajoutée en fin).
+- **Supprimer** une question non jouée (✕).
+- **Lancer** n'importe quelle question au choix (▶), dans l'ordre voulu — le bouton « Question suivante » reste disponible pour l'enchaînement séquentiel (= première question non encore jouée).
+- **Annuler la question en cours** avant révélation (bouton dans le panneau Déroulé) : réponses jetées, aucun point.
+- **Invalider une question déjà révélée** (↩, dans la liste ou le panneau Déroulé) : retire les points qu'elle avait attribués ; elle redevient jouable.
+- **Vider toutes les questions** (zone sensible).
+
+Attention : ces modifications manuelles sont écrasées par un nouvel import. Les questions ont un **id stable** (le suivi « jouée / en cours » et l'annulation des points ne dépendent pas de l'ordre dans la liste).
 
 ### Import depuis Google Sheets
 
@@ -82,6 +90,8 @@ Fonctionne aussi tel quel sur Railway, Fly.io, ou tout hébergeur Node.js (le po
   - La réponse Excel est stockée **brute** (`answerRaw`) et résolue à la volée (`resolveAnswer`) : on peut changer les prénoms des mariés après l'import sans casser la correspondance.
   - La bonne réponse n'est **jamais envoyée aux joueurs** avant la phase `reveal`.
   - Phases : `lobby → question → reveal → (question…) → ended`.
+  - **Identité des questions par `id` stable**, pas par index de tableau (sinon une suppression décalerait le suivi des questions jouées et des points à annuler). `game.results` (id → réponses figées + bonne réponse) mémorise chaque question révélée pour permettre l'invalidation (réversion exacte des points et du temps). `game.current` = id de la question active/affichée. Les questions jouées se déduisent des clés de `game.results`, pas de l'ordre.
+  - `resetProgress()` remet la progression à zéro (questions jouées, question active) sans toucher aux scores ; utilisé par l'import, `admin:reset` (qui en plus remet les scores à 0) et `admin:clearQuestions`.
 - `public/index.html` — page joueur (mobile), autonome (CSS/JS inline).
 - `public/admin.html` — régie, autonome. Mot de passe gardé en `sessionStorage`, re-login auto à la reconnexion.
 - `public/classement.html` — leaderboard temps réel (room Socket.IO `board`, événement `board:join`), animation FLIP sur les changements de position, limité aux 15 premiers à l'écran.

@@ -24,15 +24,21 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 // ---------------------------------------------------------------------------
 const game = {
   couple: { a: 'Marié·e A', b: 'Marié·e B' },
-  questions: [],        // { text, answerRaw }
-  current: -1,          // index de la question en cours
+  questions: [],        // { id, text, answerRaw } — id stable (l'index de tableau bouge si on supprime)
+  nextQid: 1,           // compteur d'id
+  current: null,        // id de la question active (ou venant d'être révélée), null sinon
   phase: 'lobby',       // lobby | question | reveal | ended
   startedAt: 0,
   correct: null,        // 'a' | 'b' | 'both' (figé à la révélation)
   counts: null,         // répartition des réponses (figée à la révélation)
   players: new Map(),   // token -> { token, name, score, time }
   answers: new Map(),   // token -> { choice, ms } pour la question en cours
+  results: {},          // id -> { correct, answers } pour chaque question jouée (permet d'annuler)
 };
+
+const newQ = (text, answerRaw) => ({ id: game.nextQid++, text, answerRaw });
+const qById = id => game.questions.find(q => q.id === id);
+const isPlayed = id => Object.prototype.hasOwnProperty.call(game.results, id);
 
 // Normalise un texte pour comparaison : minuscules, sans accents
 const fold = s => String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -63,12 +69,13 @@ function leaderboard() {
 }
 
 function playerState() {
-  const q = game.questions[game.current];
+  const curIdx = game.questions.findIndex(q => q.id === game.current); // position 0-based pour l'affichage « X / Y »
+  const q = game.questions[curIdx];
   const showResults = game.phase === 'reveal' || game.phase === 'ended';
   return {
     phase: game.phase,
     couple: game.couple,
-    index: game.current,
+    index: curIdx,
     total: game.questions.length,
     question: q ? q.text : null,
     correct: showResults ? game.correct : null,
@@ -79,10 +86,16 @@ function playerState() {
 }
 
 function adminState() {
+  const playedCount = Object.keys(game.results).length;
   return {
     ...playerState(),
     leaderboard: leaderboard(),
-    questions: game.questions.map(q => ({ text: q.text, answer: resolveAnswer(q) })),
+    questions: game.questions.map(q => ({
+      id: q.id, text: q.text, answer: resolveAnswer(q),
+      played: isPlayed(q.id), current: q.id === game.current,
+    })),
+    playedCount,
+    allPlayed: game.questions.length > 0 && playedCount === game.questions.length,
     answered: game.answers.size,
     answerCounts: currentCounts(),
     players: [...game.players.values()]
@@ -137,18 +150,24 @@ function ingest(wb) {
     const answerRaw = (b1 !== null && b2 !== null)
       ? (b1 && b2 ? 'les deux' : b1 ? 'a' : b2 ? 'b' : '') // FALSE/FALSE → validation en direct
       : r[1];
-    return { text: r[0], answerRaw };
+    return newQ(r[0], answerRaw);
   });
   if (!questions.length) throw new Error('Aucune question trouvée (la colonne A est-elle remplie ?)');
 
   game.questions = questions;
-  game.current = -1;
+  resetProgress();
+  broadcast();
+  return questions.length;
+}
+
+// Remet à zéro la progression (questions jouées, question active) sans toucher aux scores
+function resetProgress() {
+  game.current = null;
   game.phase = 'lobby';
   game.answers = new Map();
   game.correct = null;
   game.counts = null;
-  broadcast();
-  return questions.length;
+  game.results = {};
 }
 
 app.post('/admin/upload', upload.single('file'), (req, res) => {
@@ -247,32 +266,48 @@ io.on('connection', socket => {
     const text = String(data?.text || '').trim();
     if (!text) return;
     const map = { a: 'a', b: 'b', both: 'les deux' };
-    game.questions.push({ text, answerRaw: map[data?.answer] || '' });
+    game.questions.push(newQ(text, map[data?.answer] || ''));
     broadcast();
   }));
 
-  socket.on('admin:deleteQuestion', admin(i => {
-    i = Number(i);
+  socket.on('admin:deleteQuestion', admin(id => {
+    id = Number(id);
     // on ne peut supprimer ni la question en cours ni une question déjà jouée
-    if (!Number.isInteger(i) || i <= game.current || i >= game.questions.length) return;
-    game.questions.splice(i, 1);
+    if (!qById(id) || id === game.current || isPlayed(id)) return;
+    game.questions = game.questions.filter(q => q.id !== id);
     broadcast();
   }));
 
-  socket.on('admin:next', admin(() => {
-    if (game.current + 1 >= game.questions.length) return;
-    game.current += 1;
+  // Vide entièrement la liste des questions et remet la progression à zéro (scores conservés)
+  socket.on('admin:clearQuestions', admin(() => {
+    game.questions = [];
+    resetProgress();
+    broadcast();
+  }));
+
+  // Lance une question précise (dans l'ordre que veut l'admin) — sauf si déjà jouée
+  function launch(id) {
+    if (!qById(id) || isPlayed(id)) return;
+    game.current = id;
     game.phase = 'question';
     game.answers = new Map();
     game.correct = null;
     game.counts = null;
     game.startedAt = Date.now();
     broadcast();
+  }
+
+  socket.on('admin:launch', admin(id => launch(Number(id))));
+
+  // « Question suivante » : la première question non encore jouée, dans l'ordre de la liste
+  socket.on('admin:next', admin(() => {
+    const q = game.questions.find(q => !isPlayed(q.id) && q.id !== game.current);
+    if (q) launch(q.id);
   }));
 
   socket.on('admin:reveal', admin(choice => {
     if (game.phase !== 'question') return;
-    const correct = ['a', 'b', 'both'].includes(choice) ? choice : resolveAnswer(game.questions[game.current]);
+    const correct = ['a', 'b', 'both'].includes(choice) ? choice : resolveAnswer(qById(game.current));
     if (!correct) return; // pas de réponse en base : l'admin doit en choisir une
     game.correct = correct;
     game.counts = currentCounts();
@@ -283,7 +318,44 @@ io.on('connection', socket => {
         p.time += ans.ms;
       }
     }
+    // mémorise le résultat pour pouvoir l'annuler plus tard
+    game.results[game.current] = { correct, answers: new Map(game.answers) };
     game.phase = 'reveal';
+    broadcast();
+  }));
+
+  // Annule la question EN COURS avant révélation : réponses jetées, aucun point, retour au lobby
+  socket.on('admin:cancelCurrent', admin(() => {
+    if (game.phase !== 'question') return;
+    game.current = null;
+    game.phase = 'lobby';
+    game.answers = new Map();
+    game.correct = null;
+    game.counts = null;
+    broadcast();
+  }));
+
+  // Invalide une question DÉJÀ RÉVÉLÉE : retire les points qu'elle avait attribués
+  socket.on('admin:invalidate', admin(id => {
+    id = Number(id);
+    const res = game.results[id];
+    if (!res) return;
+    for (const [token, ans] of res.answers) {
+      const p = game.players.get(token);
+      if (p && ans.choice === res.correct) {
+        p.score = Math.max(0, p.score - 1);
+        p.time = Math.max(0, p.time - ans.ms);
+      }
+    }
+    delete game.results[id];
+    // si c'est la question affichée actuellement, on revient au lobby
+    if (id === game.current) {
+      game.current = null;
+      game.phase = 'lobby';
+      game.answers = new Map();
+      game.correct = null;
+      game.counts = null;
+    }
     broadcast();
   }));
 
@@ -293,11 +365,7 @@ io.on('connection', socket => {
   }));
 
   socket.on('admin:reset', admin(() => {
-    game.current = -1;
-    game.phase = 'lobby';
-    game.answers = new Map();
-    game.correct = null;
-    game.counts = null;
+    resetProgress();
     for (const p of game.players.values()) {
       p.score = 0;
       p.time = 0;

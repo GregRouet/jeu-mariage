@@ -113,7 +113,7 @@
   /* Listes */
   ol.qlist, ul.plist { list-style: none; max-height: 320px; overflow-y: auto; }
   .qlist li {
-    display: grid; grid-template-columns: 26px 1fr auto 22px; gap: 8px;
+    display: grid; grid-template-columns: 24px 1fr auto auto 22px; gap: 8px;
     padding: 7px 8px; font-size: 13px; border-bottom: 1px dashed var(--line); align-items: baseline;
   }
   .qdel {
@@ -121,6 +121,12 @@
     font-size: 14px; line-height: 1; padding: 2px; opacity: .5; transition: opacity .15s;
   }
   .qdel:hover { opacity: 1; }
+  .qgo {
+    background: none; border: none; cursor: pointer; color: var(--gold);
+    font-size: 13px; line-height: 1; padding: 2px 4px; opacity: .8; transition: opacity .15s, color .15s;
+  }
+  .qgo:hover { opacity: 1; color: var(--ink); }
+  .qlist li .pin { color: var(--gold); }
   select {
     font-family: 'Jost'; font-size: 13px; color: var(--ink);
     background: rgba(255,255,255,.5); border: 1px solid var(--line); padding: 9px 8px; outline: none;
@@ -233,7 +239,8 @@
       <div class="panel">
         <h3>Zone sensible</h3>
         <button class="btn danger" id="resetBtn" style="width:100%;margin-bottom:10px">Recommencer la partie (scores à zéro, on garde les joueurs)</button>
-        <button class="btn danger" id="clearBtn" style="width:100%">Vider la liste des joueurs</button>
+        <button class="btn danger" id="clearBtn" style="width:100%;margin-bottom:10px">Vider la liste des joueurs</button>
+        <button class="btn danger" id="clearQBtn" style="width:100%">Vider toutes les questions</button>
       </div>
     </div>
 
@@ -344,6 +351,10 @@
     if (confirm('Supprimer TOUS les joueurs et leurs scores ? Ils devront ressaisir leur prénom.')) socket.emit('admin:clearPlayers');
   };
 
+  $('clearQBtn').onclick = () => {
+    if (confirm('Supprimer TOUTES les questions ? La progression est remise à zéro (les scores des joueurs restent).')) socket.emit('admin:clearQuestions');
+  };
+
   function delPlayer(token, name) {
     if (confirm('Supprimer le joueur « ' + name + ' » ?')) socket.emit('admin:removePlayer', token);
   }
@@ -359,20 +370,24 @@
     renderPlayers();
   }
 
+  function currentQ() { return (state.questions || []).find(q => q.current); }
+
   function renderStage() {
     const el = $('stage');
-    const { phase, index, total, question, couple } = state;
-    const next = '<button class="btn big gold" onclick="socket.emit(\'admin:next\')"' +
-      (index + 1 >= total ? ' disabled' : '') + '>' +
-      (index < 0 ? 'Lancer la première question' : 'Question suivante (' + (index + 2) + '/' + total + ')') +
-      '</button>';
+    const { phase, index, total, question, couple, playedCount, allPlayed } = state;
+    const nextBtn = '<button class="btn big gold" onclick="socket.emit(\'admin:next\')">' +
+      (playedCount === 0 ? 'Lancer la première question' : 'Question suivante') + '</button>';
+    const endBtn = '<button class="btn big gold" onclick="socket.emit(\'admin:end\')">Afficher les résultats finaux 🏆</button>';
 
     if (phase === 'lobby') {
-      el.innerHTML = '<p class="muted">' + (total ? total + ' questions prêtes — ' + state.playerCount + ' invités connectés' : 'Importe d’abord le fichier de questions ci-dessous') + '</p>' +
-        (total ? next : '');
+      if (!total) { el.innerHTML = '<p class="muted">Importe ou ajoute d’abord des questions ci-dessous</p>'; return; }
+      el.innerHTML =
+        '<p class="muted">' + playedCount + ' / ' + total + ' questions jouées — ' + state.playerCount + ' invités connectés</p>' +
+        (allPlayed ? endBtn : nextBtn) +
+        '<p class="muted" style="margin-top:8px">Tu peux aussi lancer une question précise avec ▶ dans la liste.</p>';
 
     } else if (phase === 'question') {
-      const q = state.questions[index];
+      const q = currentQ();
       const auto = q && q.answer;
       el.innerHTML =
         '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — en cours</div>' +
@@ -384,16 +399,17 @@
             '<div class="reveal-btns">' +
             '<button class="btn" onclick="reveal(\'a\')">' + esc(couple.a) + '</button>' +
             '<button class="btn" onclick="reveal(\'b\')">' + esc(couple.b) + '</button>' +
-            '<button class="btn" onclick="reveal(\'both\')">Les deux</button></div>');
+            '<button class="btn" onclick="reveal(\'both\')">Les deux</button></div>') +
+        '<button class="btn ghost" style="width:100%;margin-top:10px" onclick="cancelCurrent()">✕ Annuler cette question (sans points)</button>';
 
     } else if (phase === 'reveal') {
+      const q = currentQ();
       el.innerHTML =
         '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — réponse : ' + esc(answerLabel(state.correct)) + '</div>' +
         '<div class="stage-q">' + esc(question) + '</div>' +
         distHtml() +
-        (index + 1 >= total
-          ? '<button class="btn big gold" onclick="socket.emit(\'admin:end\')">Afficher les résultats finaux 🏆</button>'
-          : next);
+        (allPlayed ? endBtn : nextBtn) +
+        (q ? '<button class="btn danger" style="width:100%;margin-top:10px" onclick="invalidateQ(' + q.id + ')">↩ Invalider cette question (retirer les points)</button>' : '');
 
     } else if (phase === 'ended') {
       el.innerHTML = '<p class="muted">Partie terminée — les invités voient le podium ✦</p>';
@@ -422,20 +438,43 @@
     const qs = state.questions || [];
     $('qcount').textContent = qs.length ? '— ' + qs.length : '';
     if (!qs.length) { $('qlist').innerHTML = '<div class="muted">Aucune question importée</div>'; return; }
-    $('qlist').innerHTML = qs.map((q, i) =>
-      '<li class="' + (i < state.index ? 'done' : i === state.index ? 'now' : '') + '">' +
-      '<span class="qi">' + (i + 1) + '</span><span>' + esc(q.text) + '</span>' +
-      '<span class="chip' + (q.answer ? '' : ' live') + '">' + (q.answer ? esc(answerLabel(q.answer)) : 'en direct') + '</span>' +
-      (i > state.index ? '<button class="qdel" title="Supprimer" onclick="delQ(' + i + ')">✕</button>' : '<span></span>') +
-      '</li>'
-    ).join('');
+    $('qlist').innerHTML = qs.map((q, i) => {
+      const cls = q.played ? 'done' : q.current ? 'now' : '';
+      const chip = '<span class="chip' + (q.answer ? '' : ' live') + '">' + (q.answer ? esc(answerLabel(q.answer)) : 'en direct') + '</span>';
+      let action;
+      if (q.current) action = '<span class="pin" title="En cours">●</span>';
+      else if (q.played) action = '<button class="qdel" style="color:var(--ink-soft)" title="Invalider (retirer les points)" onclick="invalidateQ(' + q.id + ')">↩</button>';
+      else action = '<button class="qgo" title="Lancer cette question" onclick="launchQ(' + q.id + ')">▶</button>';
+      const del = (!q.played && !q.current)
+        ? '<button class="qdel" title="Supprimer" onclick="delQ(' + q.id + ')">✕</button>'
+        : '<span></span>';
+      return '<li class="' + cls + '">' +
+        '<span class="qi">' + (i + 1) + '</span><span>' + esc(q.text) + '</span>' +
+        chip + action + del + '</li>';
+    }).join('');
     $('optA').textContent = state.couple.a;
     $('optB').textContent = state.couple.b;
   }
 
-  function delQ(i) {
-    const q = state.questions[i];
-    if (q && confirm('Supprimer la question « ' + q.text + ' » ?')) socket.emit('admin:deleteQuestion', i);
+  function findQ(id) { return (state.questions || []).find(q => q.id === id); }
+
+  function delQ(id) {
+    const q = findQ(id);
+    if (q && confirm('Supprimer la question « ' + q.text + ' » ?')) socket.emit('admin:deleteQuestion', id);
+  }
+  function launchQ(id) {
+    const q = findQ(id);
+    if (!q) return;
+    if (state.phase === 'question' &&
+        !confirm('Une question est déjà en cours. La remplacer par « ' + q.text + ' » ? (la question en cours sera abandonnée, sans points)')) return;
+    socket.emit('admin:launch', id);
+  }
+  function invalidateQ(id) {
+    const q = findQ(id);
+    if (q && confirm('Invalider « ' + q.text + ' » et retirer les points qu’elle a rapportés ?')) socket.emit('admin:invalidate', id);
+  }
+  function cancelCurrent() {
+    if (confirm('Annuler la question en cours ? Les réponses reçues seront jetées, aucun point attribué.')) socket.emit('admin:cancelCurrent');
   }
 
   $('addQBtn').onclick = () => {

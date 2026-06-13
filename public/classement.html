@@ -115,9 +115,20 @@
   #qrcode { display: inline-block; padding: 6px; background: #fff; border: 1px solid var(--line); }
   #qrcode img, #qrcode canvas { display: block; }
   .join .u { font-size: 11px; color: var(--ink-soft); margin-top: 6px; max-width: 150px; word-break: break-all; }
+
+  /* Bouton plein écran (discret, en haut à droite) */
+  .fs-btn {
+    position: fixed; top: 16px; right: 16px; z-index: 4;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(255,253,247,.85); border: 1px solid var(--line);
+    color: var(--ink-soft); font-size: 18px; cursor: pointer;
+    display: grid; place-items: center; opacity: .35; transition: opacity .2s;
+  }
+  .fs-btn:hover { opacity: 1; }
 </style>
 </head>
 <body>
+<button class="fs-btn" id="fsBtn" title="Plein écran">⛶</button>
 <div class="wrap">
   <header>
     <div class="rule"><span>✦</span></div>
@@ -149,6 +160,23 @@
   const url = location.origin + '/';
   $('url').textContent = url.replace(/^https?:\/\//, '');
   new QRCode($('qrcode'), { text: url, width: 130, height: 130, colorDark: '#2c3526', colorLight: '#ffffff' });
+
+  // Plein écran (API native, avec repli webkit pour Safari)
+  const fsEl = document.documentElement;
+  $('fsBtn').onclick = () => {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl);
+    }
+  };
+  const syncFsBtn = () => {
+    const on = document.fullscreenElement || document.webkitFullscreenElement;
+    $('fsBtn').textContent = on ? '✕' : '⛶';
+    $('fsBtn').title = on ? 'Quitter le plein écran' : 'Plein écran';
+  };
+  document.addEventListener('fullscreenchange', syncFsBtn);
+  document.addEventListener('webkitfullscreenchange', syncFsBtn);
 
   const avatars = {}; // pid -> dataURL
   const socket = io();

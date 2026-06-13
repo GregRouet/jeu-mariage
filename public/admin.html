@@ -374,7 +374,7 @@
 
   function renderStage() {
     const el = $('stage');
-    const { phase, index, total, question, couple, playedCount, allPlayed } = state;
+    const { phase, total, question, couple, playedCount, allPlayed } = state;
     const nextBtn = '<button class="btn big gold" onclick="socket.emit(\'admin:next\')">' +
       (playedCount === 0 ? 'Lancer la première question' : 'Question suivante') + '</button>';
     const endBtn = '<button class="btn big gold" onclick="socket.emit(\'admin:end\')">Afficher les résultats finaux 🏆</button>';
@@ -390,7 +390,7 @@
       const q = currentQ();
       const auto = q && q.answer;
       el.innerHTML =
-        '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — en cours</div>' +
+        '<div class="stage-num">Question en cours</div>' +
         '<div class="stage-q">' + esc(question) + '</div>' +
         '<div class="answered-count"><b>' + state.answered + '</b> / ' + state.playerCount + ' réponses reçues</div>' +
         (auto
@@ -405,7 +405,7 @@
     } else if (phase === 'reveal') {
       const q = currentQ();
       el.innerHTML =
-        '<div class="stage-num">Question ' + (index + 1) + ' / ' + total + ' — réponse : ' + esc(answerLabel(state.correct)) + '</div>' +
+        '<div class="stage-num">Réponse : ' + esc(answerLabel(state.correct)) + '</div>' +
         '<div class="stage-q">' + esc(question) + '</div>' +
         distHtml() +
         (allPlayed ? endBtn : nextBtn) +

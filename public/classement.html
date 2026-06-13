@@ -154,14 +154,14 @@
   }
 
   function renderStatus() {
-    const { phase, index, total, question, answered, playerCount, correct, couple } = state;
+    const { phase, question, answered, playerCount, correct, couple } = state;
     let html = '';
     if (phase === 'lobby') html = playerCount + ' invité' + (playerCount > 1 ? 's' : '') + ' — la partie va bientôt commencer';
-    else if (phase === 'question') html = 'Question ' + (index + 1) + ' / ' + total + ' — ' + answered + ' réponse' + (answered > 1 ? 's' : '') +
+    else if (phase === 'question') html = answered + ' réponse' + (answered > 1 ? 's' : '') +
       '<span class="q">' + esc(question) + '</span>';
     else if (phase === 'reveal') {
       const lbl = correct === 'both' ? 'Les deux !' : couple[correct];
-      html = 'Question ' + (index + 1) + ' / ' + total + ' — réponse : ' + esc(lbl);
+      html = 'Réponse : ' + esc(lbl);
     }
     else if (phase === 'ended') html = '✦ Résultats finaux ✦';
     $('status').innerHTML = html;

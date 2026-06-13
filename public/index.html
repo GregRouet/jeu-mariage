@@ -249,7 +249,7 @@
 
   <!-- Question -->
   <section class="screen" id="s-question">
-    <div class="qnum" id="qnum">Question 1</div>
+    <div class="qnum" id="qnum">✦</div>
     <div class="qtext" id="qtext"></div>
     <div class="choices">
       <button class="choice" data-choice="a" id="chA"></button>
@@ -357,7 +357,7 @@
       show('s-wait');
 
     } else if (state.phase === 'question') {
-      $('qnum').textContent = 'Question ' + (state.index + 1) + ' / ' + state.total;
+      $('qnum').textContent = '✦';
       $('qtext').textContent = state.question;
       $('chA').textContent = couple.a;
       $('chB').textContent = couple.b;

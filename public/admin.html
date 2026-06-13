@@ -150,6 +150,7 @@
     background: var(--paper-deep); border: 1px solid var(--gold-soft); color: var(--ink-soft);
   }
   .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .av.heart { background: var(--paper); font-size: 17px; line-height: 1; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
   .dot.on { background: var(--gold); box-shadow: 0 0 6px var(--gold-soft); }
   .plist .pts { font-weight: 600; font-size: 13px; }
@@ -300,6 +301,8 @@
   socket.on('state', s => { state = s; render(); });
   const avatars = {}; // pid -> dataURL
   socket.on('avatarUpdate', ({ pid, avatar }) => { avatars[pid] = avatar; if (state) renderPlayers(); });
+  const HEART_COLORS = ['#d2544e','#e08a3c','#caa23c','#7ca85c','#3f9e8f','#4f86c6','#7c6bbf','#b85c9e','#c2785b','#5a9c8f','#a0556a','#6a7fb0'];
+  const heartColor = pid => HEART_COLORS[(Number(pid) - 1 + HEART_COLORS.length) % HEART_COLORS.length];
 
   let staticDone = false;
   function initStatic() {
@@ -510,7 +513,9 @@
 
   function avHtml(p) {
     const a = avatars[p.pid];
-    return '<span class="av">' + (a ? '<img src="' + a + '" alt="">' : esc((p.name || '?')[0].toUpperCase())) + '</span>';
+    return a
+      ? '<span class="av"><img src="' + a + '" alt=""></span>'
+      : '<span class="av heart" style="color:' + heartColor(p.pid) + '">♥</span>';
   }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }

@@ -80,6 +80,7 @@
     background: var(--paper-deep); border: 1px solid var(--gold-soft); color: var(--ink-soft);
   }
   .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .av.heart { background: var(--paper); font-size: 28px; line-height: 1; }
   .lb li.r1 .av { border-color: var(--gold); border-width: 2px; }
   .lb li .pname { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb li .pts { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -210,10 +211,14 @@
   // Temps de réponse cumulé (départage les ex æquo) — masqué tant qu'aucun point
   function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : ''; }
 
-  // Vignette : photo si disponible, sinon l'initiale du nom
+  // Vignette : photo si disponible, sinon un cœur d'une couleur propre au joueur
+  const HEART_COLORS = ['#d2544e','#e08a3c','#caa23c','#7ca85c','#3f9e8f','#4f86c6','#7c6bbf','#b85c9e','#c2785b','#5a9c8f','#a0556a','#6a7fb0'];
+  const heartColor = pid => HEART_COLORS[(Number(pid) - 1 + HEART_COLORS.length) % HEART_COLORS.length];
   function avHtml(p) {
     const a = avatars[p.pid];
-    return '<span class="av">' + (a ? '<img src="' + a + '" alt="">' : esc((p.name || '?')[0].toUpperCase())) + '</span>';
+    return a
+      ? '<span class="av"><img src="' + a + '" alt=""></span>'
+      : '<span class="av heart" style="color:' + heartColor(p.pid) + '">♥</span>';
   }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }

@@ -87,7 +87,7 @@ function adminState() {
     answerCounts: currentCounts(),
     players: [...game.players.values()]
       .sort((x, y) => y.score - x.score || x.time - y.time)
-      .map(p => ({ name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
+      .map(p => ({ token: p.token, name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
   };
 }
 
@@ -302,6 +302,20 @@ io.on('connection', socket => {
       p.score = 0;
       p.time = 0;
     }
+    broadcast();
+  }));
+
+  // Vide entièrement la liste des joueurs (utile pour effacer les joueurs de test avant la soirée)
+  socket.on('admin:clearPlayers', admin(() => {
+    game.players = new Map();
+    game.answers = new Map();
+    broadcast();
+  }));
+
+  // Supprime un joueur précis (identifié par son token)
+  socket.on('admin:removePlayer', admin(token => {
+    game.players.delete(String(token));
+    game.answers.delete(String(token));
     broadcast();
   }));
 });

@@ -37,6 +37,19 @@
   .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; align-items: start; }
   @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
 
+  /* Smartphone : tout sur une colonne, rangées qui passent à la ligne,
+     champs en 16px (sinon iOS zoome au focus), boutons pleine largeur */
+  @media (max-width: 560px) {
+    .wrap { padding: 18px 12px 50px; }
+    h1 { font-size: 27px; }
+    .panel { padding: 16px 14px; margin-bottom: 14px; }
+    input[type=text], input[type=password], select { font-size: 16px; }
+    .row { flex-wrap: wrap; gap: 8px; }
+    .row > input, .row > select, .row > button, .row > div { flex: 1 1 100% !important; }
+    .reveal-btns .btn { flex: 1 1 100%; }
+    ol.qlist, ul.plist { max-height: 260px; }
+  }
+
   .panel {
     background: rgba(255,253,247,.7); border: 1px solid var(--line);
     box-shadow: 0 0 0 4px var(--paper), 0 0 0 5px var(--line);
@@ -122,12 +135,17 @@
   .chip.live { border-color: var(--blush); color: var(--blush); }
 
   .plist li {
-    display: grid; grid-template-columns: 14px 1fr auto; gap: 10px;
+    display: grid; grid-template-columns: 14px 1fr auto 30px; gap: 10px;
     padding: 7px 8px; font-size: 14px; border-bottom: 1px dashed var(--line); align-items: center;
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
   .dot.on { background: var(--gold); box-shadow: 0 0 6px var(--gold-soft); }
   .plist .pts { font-weight: 600; font-size: 13px; }
+  .pdel {
+    background: none; border: none; cursor: pointer; color: var(--blush);
+    font-size: 16px; line-height: 1; padding: 4px; opacity: .5; transition: opacity .15s;
+  }
+  .pdel:hover { opacity: 1; }
 
   /* QR */
   .qr-zone { text-align: center; }
@@ -214,7 +232,8 @@
 
       <div class="panel">
         <h3>Zone sensible</h3>
-        <button class="btn danger" id="resetBtn">Recommencer la partie (scores à zéro)</button>
+        <button class="btn danger" id="resetBtn" style="width:100%;margin-bottom:10px">Recommencer la partie (scores à zéro, on garde les joueurs)</button>
+        <button class="btn danger" id="clearBtn" style="width:100%">Vider la liste des joueurs</button>
       </div>
     </div>
 
@@ -318,8 +337,16 @@
   };
 
   $('resetBtn').onclick = () => {
-    if (confirm('Remettre tous les scores à zéro et revenir au début ?')) socket.emit('admin:reset');
+    if (confirm('Remettre tous les scores à zéro et revenir au début ? (les joueurs restent connectés)')) socket.emit('admin:reset');
   };
+
+  $('clearBtn').onclick = () => {
+    if (confirm('Supprimer TOUS les joueurs et leurs scores ? Ils devront ressaisir leur prénom.')) socket.emit('admin:clearPlayers');
+  };
+
+  function delPlayer(token, name) {
+    if (confirm('Supprimer le joueur « ' + name + ' » ?')) socket.emit('admin:removePlayer', token);
+  }
 
   function flash(el, msg, cls) { el.textContent = msg; el.className = 'status ' + cls; }
 
@@ -427,7 +454,8 @@
     $('plist').innerHTML = ps.map(p =>
       '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
       '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') +
-      (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</span></li>'
+      (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</span>' +
+      '<button class="pdel" title="Supprimer" onclick="delPlayer(\'' + p.token + '\', \'' + esc(p.name).replace(/'/g, "\\'") + '\')">✕</button></li>'
     ).join('');
   }
 

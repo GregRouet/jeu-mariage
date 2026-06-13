@@ -120,14 +120,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const re = await emit(bob2, 'join', { token: 'tok-Bob', name: 'Bob' });
   assert(re.you.score === 1, 'Bob reconnecté retrouve son score (1)');
 
+  // 7b. Suppression d'un joueur précis (par token) puis vidage complet
+  assert(adminState.players.some(p => p.name === 'Alice' && p.token), 'le token des joueurs est exposé à l’admin');
+  admin.emit('admin:removePlayer', 'tok-Alice');
+  await wait(150);
+  assert(!adminState.players.some(p => p.name === 'Alice'), 'joueur Alice supprimé');
+  assert(adminState.players.some(p => p.name === 'Chloé'), 'les autres joueurs restent après suppression d’un seul');
+
   // 8. Fin + reset
   admin.emit('admin:end');
   await wait(150);
   assert(players[0].state.phase === 'ended', 'phase finale diffusée');
-  assert(boardState.phase === 'ended' && boardState.leaderboard.length >= 3, 'page classement à jour en fin de partie');
+  assert(boardState.phase === 'ended' && boardState.leaderboard.length >= 2, 'page classement à jour en fin de partie');
   admin.emit('admin:reset');
   await wait(150);
   assert(players[0].state.phase === 'lobby' && adminState.players.every(p => p.score === 0), 'reset : retour au lobby, scores à zéro');
+
+  // 8b. Vidage complet de la liste des joueurs
+  admin.emit('admin:clearPlayers');
+  await wait(150);
+  assert(adminState.players.length === 0 && adminState.playerCount === 0, 'liste des joueurs entièrement vidée');
 
   console.log('\nTous les tests passent ✦');
   process.exit(0);

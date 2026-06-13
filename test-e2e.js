@@ -123,8 +123,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // 7b. Suppression d'un joueur précis (par token) puis vidage complet
   assert(adminState.players.some(p => p.name === 'Alice' && p.token), 'le token des joueurs est exposé à l’admin');
+  let aliceKicked = false;
+  players[0].sock.on('kicked', () => { aliceKicked = true; });
   admin.emit('admin:removePlayer', 'tok-Alice');
   await wait(150);
+  assert(aliceKicked, 'le joueur supprimé reçoit l’ordre de revenir à l’accueil (kicked)');
   assert(!adminState.players.some(p => p.name === 'Alice'), 'joueur Alice supprimé');
   assert(adminState.players.some(p => p.name === 'Chloé'), 'les autres joueurs restent après suppression d’un seul');
 
@@ -138,8 +141,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   assert(players[0].state.phase === 'lobby' && adminState.players.every(p => p.score === 0), 'reset : retour au lobby, scores à zéro');
 
   // 8b. Vidage complet de la liste des joueurs
+  let chloeKicked = false;
+  players[2].sock.on('kicked', () => { chloeKicked = true; });
   admin.emit('admin:clearPlayers');
   await wait(150);
+  assert(chloeKicked, 'vidage : les joueurs restants reçoivent kicked');
   assert(adminState.players.length === 0 && adminState.playerCount === 0, 'liste des joueurs entièrement vidée');
 
   // 9. Scénario isolé : vider les questions, lancer au choix, annuler, invalider

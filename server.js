@@ -221,6 +221,7 @@ io.on('connection', socket => {
     }
     socket.data.token = token;
     socket.join('players');
+    socket.join('player:' + token); // salle dédiée pour pouvoir cibler ce joueur (ex. expulsion)
     cb && cb({
       state: playerState(),
       you: { name: p.name, score: p.score, choice: game.answers.get(token)?.choice ?? null },
@@ -375,6 +376,7 @@ io.on('connection', socket => {
 
   // Vide entièrement la liste des joueurs (utile pour effacer les joueurs de test avant la soirée)
   socket.on('admin:clearPlayers', admin(() => {
+    io.to('players').emit('kicked'); // renvoie tous les téléphones à l'accueil, cache effacé
     game.players = new Map();
     game.answers = new Map();
     broadcast();
@@ -382,8 +384,10 @@ io.on('connection', socket => {
 
   // Supprime un joueur précis (identifié par son token)
   socket.on('admin:removePlayer', admin(token => {
-    game.players.delete(String(token));
-    game.answers.delete(String(token));
+    token = String(token);
+    io.to('player:' + token).emit('kicked'); // renvoie son téléphone à l'accueil, cache effacé
+    game.players.delete(token);
+    game.answers.delete(token);
     broadcast();
   }));
 });

@@ -335,6 +335,18 @@
     render();
   });
 
+  // L'admin a supprimé ce joueur : on efface le cache et on repart de l'accueil,
+  // avec une identité neuve (sinon un refresh le recréerait à l'identique)
+  socket.on('kicked', () => {
+    joined = false; myName = ''; myChoice = null; state = null;
+    localStorage.removeItem('jm_name');
+    token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('jm_token', token);
+    $('nameInput').value = '';
+    $('joinErr').textContent = '';
+    show('s-join');
+  });
+
   document.querySelectorAll('.choice').forEach(btn => {
     btn.onclick = () => {
       if (!state || state.phase !== 'question' || myChoice) return;

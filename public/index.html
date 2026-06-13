@@ -185,11 +185,32 @@
   .lb-title::before, .lb-title::after { content: '✦'; color: var(--gold); font-size: 9px; }
   .lb { list-style: none; }
   .lb li {
-    display: grid; grid-template-columns: 30px 1fr auto; gap: 10px;
-    padding: 9px 12px; font-size: 15px; align-items: baseline;
+    display: grid; grid-template-columns: 26px 32px 1fr auto; gap: 10px;
+    padding: 9px 12px; font-size: 15px; align-items: center;
     border-bottom: 1px dashed var(--line);
   }
   .lb li .rank { font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--ink-soft); }
+
+  /* Vignette photo (avatar) */
+  .av {
+    width: 32px; height: 32px; border-radius: 50%; flex: none; overflow: hidden;
+    display: grid; place-items: center; font-size: 13px; font-weight: 500;
+    background: var(--paper-deep); border: 1px solid var(--gold-soft); color: var(--ink-soft);
+  }
+  .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* Prise de photo (inscription + attente) */
+  .photo-pick {
+    display: flex; align-items: center; gap: 12px; justify-content: center;
+    margin: 20px 0 2px; cursor: pointer; color: var(--ink-soft); font-size: 14px;
+  }
+  .photo-prev {
+    width: 50px; height: 50px; border-radius: 50%; flex: none; overflow: hidden;
+    display: grid; place-items: center; font-size: 20px;
+    background: var(--paper-deep); border: 1px solid var(--gold-soft);
+  }
+  .photo-prev img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-change { display: inline-block; margin-top: 18px; cursor: pointer; color: var(--gold); font-size: 13px; }
   .lb li.top .rank { color: var(--gold); font-weight: 700; }
   .lb li.me { background: rgba(168,133,60,.12); outline: 1px solid var(--gold-soft); }
   .lb li .pts { font-weight: 600; }
@@ -214,6 +235,8 @@
   .pod.p1 .pname { font-size: 20px; color: var(--gold); }
   .crown { font-size: 20px; }
   .pod .ptime { margin-top: 6px; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .pod .av { width: 52px; height: 52px; margin: 0 auto 8px; font-size: 18px; }
+  .pod.p1 .av { width: 64px; height: 64px; border-color: var(--gold); border-width: 2px; }
 
   footer { text-align: center; margin-top: auto; padding-top: 34px; color: var(--gold-soft); font-size: 12px; letter-spacing: .3em; }
 </style>
@@ -231,8 +254,13 @@
   <section class="screen on" id="s-join">
     <div class="card">
       <h2>Bienvenue !</h2>
-      <p class="hint">Entre ton prénom pour rejoindre la partie</p>
-      <input type="text" id="nameInput" placeholder="Ton prénom" maxlength="24" autocomplete="given-name">
+      <p class="hint">Entre ton prénom (ou ton nom d'équipe) pour rejoindre la partie</p>
+      <input type="text" id="nameInput" placeholder="Ton prénom / équipe" maxlength="24" autocomplete="given-name">
+      <label class="photo-pick" id="photoPick">
+        <span class="photo-prev" id="photoPrev">📷</span>
+        <span id="photoLabel">Ajouter une photo (optionnel)</span>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+      </label>
       <button class="btn" id="joinBtn">Entrer dans le jeu</button>
       <div class="err" id="joinErr"></div>
     </div>
@@ -244,6 +272,10 @@
       <h2 id="waitTitle">Bienvenue !</h2>
       <p class="pulse"><span class="diamond">✦</span> <span id="waitMsg">En attente de la prochaine question…</span> <span class="diamond">✦</span></p>
       <p class="count"><span id="playerCount">0</span> invités connectés</p>
+      <label class="photo-change" id="photoChange">
+        <span id="photoChangeLabel">📷 Ajouter / changer ma photo</span>
+        <input type="file" id="photoInput2" accept="image/*" hidden>
+      </label>
     </div>
   </section>
 
@@ -292,7 +324,10 @@
   let state = null;
   let myChoice = null;     // choix pour la question en cours
   let myScore = 0;
+  let myPid = null;
   let joined = false;
+  let pendingAvatar = null;   // photo choisie avant d'avoir rejoint
+  const avatars = {};         // pid -> dataURL (cache local, alimenté par le serveur)
 
   const socket = io();
 
@@ -303,7 +338,10 @@
       myName = res.you.name;
       myScore = res.you.score;
       myChoice = res.you.choice;
+      myPid = res.you.pid;
+      Object.assign(avatars, res.avatars || {});
       localStorage.setItem('jm_name', myName);
+      if (pendingAvatar) { socket.emit('avatar', pendingAvatar); pendingAvatar = null; }
       state = res.state;
       render();
     });
@@ -316,6 +354,37 @@
   };
   $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
   $('nameInput').value = myName;
+
+  // --- Photo : compression en vignette carrée avant envoi (léger sur 4G) ---
+  function compress(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const S = 160, c = document.createElement('canvas');
+        c.width = c.height = S;
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2; // recadrage centré
+        c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, S, S);
+        resolve(c.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  async function pickPhoto(file) {
+    if (!file) return;
+    try {
+      const dataUrl = await compress(file);
+      $('photoPrev').innerHTML = '<img src="' + dataUrl + '" alt="">';
+      $('photoLabel').textContent = 'Photo prête ✦ (toucher pour changer)';
+      if (joined) socket.emit('avatar', dataUrl); else pendingAvatar = dataUrl;
+    } catch { $('joinErr').textContent = 'Photo illisible, réessaie'; }
+  }
+  $('photoInput').addEventListener('change', e => pickPhoto(e.target.files[0]));
+  $('photoInput2').addEventListener('change', e => pickPhoto(e.target.files[0]));
 
   // Prénom déjà connu (refresh, nouvel onglet) : on rejoint sans repasser
   // par l'écran d'inscription
@@ -335,15 +404,20 @@
     render();
   });
 
+  // Une photo arrive (de soi ou d'un autre joueur) : on met à jour le cache et l'affichage
+  socket.on('avatarUpdate', ({ pid, avatar }) => { avatars[pid] = avatar; render(); });
+
   // L'admin a supprimé ce joueur : on efface le cache et on repart de l'accueil,
   // avec une identité neuve (sinon un refresh le recréerait à l'identique)
   socket.on('kicked', () => {
-    joined = false; myName = ''; myChoice = null; state = null;
+    joined = false; myName = ''; myChoice = null; myPid = null; pendingAvatar = null; state = null;
     localStorage.removeItem('jm_name');
     token = Math.random().toString(36).slice(2) + Date.now().toString(36);
     localStorage.setItem('jm_token', token);
     $('nameInput').value = '';
     $('joinErr').textContent = '';
+    $('photoPrev').innerHTML = '📷';
+    $('photoLabel').textContent = 'Ajouter une photo (optionnel)';
     show('s-join');
   });
 
@@ -436,17 +510,25 @@
   }
   function lbRow(p, i, myRank) {
     return '<li class="' + (i < 3 ? 'top ' : '') + (i === myRank ? 'me' : '') + '">' +
-      '<span class="rank">' + (i + 1) + '</span><span>' + esc(p.name) + '</span>' +
+      '<span class="rank">' + (i + 1) + '</span>' + avHtml(p) +
+      '<span>' + esc(p.name) + '</span>' +
       '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + fmtTime(p) + '</small></span></li>';
   }
 
   // Temps de réponse cumulé (départage les ex æquo) — masqué tant qu'aucun point
   function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : ''; }
 
+  // Vignette : photo si disponible, sinon l'initiale du nom
+  function avHtml(p) {
+    const a = avatars[p.pid];
+    return '<span class="av">' + (a ? '<img src="' + a + '" alt="">' : esc((p.name || '?')[0].toUpperCase())) + '</span>';
+  }
+
   function renderPodium() {
     const b = state.leaderboard || [];
     const pod = (i, cls, crown) => b[i] ?
       '<div class="pod ' + cls + '">' + (crown ? '<div class="crown">👑</div>' : '') +
+      avHtml(b[i]) +
       '<div class="pname">' + esc(b[i].name) + '</div>' +
       '<div class="block">' + b[i].score + '<small>POINT' + (b[i].score > 1 ? 'S' : '') + '</small></div>' +
       (b[i].score > 0 ? '<div class="ptime">' + (b[i].time / 1000).toFixed(1) + 's</div>' : '') + '</div>' : '';

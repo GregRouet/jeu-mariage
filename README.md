@@ -95,5 +95,7 @@ Fonctionne aussi tel quel sur Railway, Fly.io, ou tout hébergeur Node.js (le po
 - `public/index.html` — page joueur (mobile), autonome (CSS/JS inline).
 - `public/admin.html` — régie, autonome. Mot de passe gardé en `sessionStorage`, re-login auto à la reconnexion.
 - `public/classement.html` — leaderboard temps réel (room Socket.IO `board`, événement `board:join`), animation FLIP sur les changements de position, limité aux 15 premiers à l'écran.
+- **Photos des joueurs (avatars)** : prises à l'inscription (optionnel) ou via « changer ma photo » sur l'écran d'attente, compressées côté client en vignette carrée 160px JPEG (`compress()` dans `index.html`). Affichées en rond à côté du nom (classement projeté, régie, écran de résultats), avec l'initiale du prénom en repli si pas de photo.
+  - **Jamais dans les broadcasts d'état** (sinon toutes les photos repartiraient à chaque réponse) : associées par un **id public `pid`** (le `token` reste secret) et diffusées une seule fois via l'événement `avatarUpdate` ; la map `pid → image` est envoyée aux nouveaux arrivants dans l'accusé de `join` / `board:join` / `admin:login`. Garde-fou serveur : refus si non `data:image/` ou > 200 Ko.
 - `test-e2e.js` — test complet du flux (`npm install --no-save socket.io-client` puis `node test-e2e.js` avec le serveur démarré).
 - Si on ajoute un événement admin avec accusé de réception, penser à appeler le callback côté serveur (sinon les `await emit(...)` du test bloquent).

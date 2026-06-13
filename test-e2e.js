@@ -158,7 +158,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(150);
   const qa = adminState.questions[0], qb = adminState.questions[1];
   const z = io(URL);
-  await emit(z, 'join', { token: 'tok-Z', name: 'Zoe' });
+  const zJoin = await emit(z, 'join', { token: 'tok-Z', name: 'Zoe' });
+  assert(zJoin.you.pid && zJoin.avatars && typeof zJoin.avatars === 'object', 'le join renvoie un id public + la map des photos');
+
+  // 9b. Photo : diffusée par id public via avatarUpdate, hors broadcast d'état
+  let gotAvatar = null;
+  admin.on('avatarUpdate', d => { gotAvatar = d; });
+  z.emit('avatar', 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
+  await wait(150);
+  assert(gotAvatar && gotAvatar.pid === zJoin.you.pid && gotAvatar.avatar.startsWith('data:image/'), 'photo diffusée via avatarUpdate avec le pid public');
+  gotAvatar = null;
+  z.emit('avatar', 'pas-une-image'); // format invalide → ignoré, aucune diffusion
+  await wait(120);
+  assert(gotAvatar === null, 'photo au format invalide rejetée (aucune diffusion)');
 
   // lancer directement la 2e question (au choix, pas la 1re)
   admin.emit('admin:launch', qb.id);

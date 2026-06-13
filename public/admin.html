@@ -141,9 +141,15 @@
   .chip.live { border-color: var(--blush); color: var(--blush); }
 
   .plist li {
-    display: grid; grid-template-columns: 14px 1fr auto 30px; gap: 10px;
+    display: grid; grid-template-columns: 14px 28px 1fr auto 30px; gap: 10px;
     padding: 7px 8px; font-size: 14px; border-bottom: 1px dashed var(--line); align-items: center;
   }
+  .av {
+    width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+    display: grid; place-items: center; font-size: 12px;
+    background: var(--paper-deep); border: 1px solid var(--gold-soft); color: var(--ink-soft);
+  }
+  .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
   .dot.on { background: var(--gold); box-shadow: 0 0 6px var(--gold-soft); }
   .plist .pts { font-weight: 600; font-size: 13px; }
@@ -281,6 +287,7 @@
       sessionStorage.setItem('jm_admin_pwd', pwd);
       $('login').classList.add('hidden');
       $('app').classList.remove('hidden');
+      Object.assign(avatars, res.avatars || {});
       state = res.state;
       initStatic();
       render();
@@ -291,6 +298,8 @@
   $('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pwd').value); });
   socket.on('connect', () => { if (password) login(password); });
   socket.on('state', s => { state = s; render(); });
+  const avatars = {}; // pid -> dataURL
+  socket.on('avatarUpdate', ({ pid, avatar }) => { avatars[pid] = avatar; if (state) renderPlayers(); });
 
   let staticDone = false;
   function initStatic() {
@@ -492,10 +501,16 @@
     if (!ps.length) { $('plist').innerHTML = '<div class="muted">Personne pour l’instant</div>'; return; }
     $('plist').innerHTML = ps.map(p =>
       '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
+      avHtml(p) +
       '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') +
       (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</span>' +
       '<button class="pdel" title="Supprimer" onclick="delPlayer(\'' + p.token + '\', \'' + esc(p.name).replace(/'/g, "\\'") + '\')">✕</button></li>'
     ).join('');
+  }
+
+  function avHtml(p) {
+    const a = avatars[p.pid];
+    return '<span class="av">' + (a ? '<img src="' + a + '" alt="">' : esc((p.name || '?')[0].toUpperCase())) + '</span>';
   }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }

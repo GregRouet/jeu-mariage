@@ -67,13 +67,20 @@
 
   .lb { list-style: none; max-width: 640px; margin: 0 auto; }
   .lb li {
-    display: grid; grid-template-columns: 52px 1fr auto; gap: 16px; align-items: baseline;
+    display: grid; grid-template-columns: 40px 48px 1fr auto; gap: 16px; align-items: center;
     padding: 12px 20px; border-bottom: 1px dashed var(--line);
     font-size: clamp(17px, 2.6vw, 22px);
     background: transparent;
     will-change: transform;
   }
   .lb li .rank { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.15em; color: var(--ink-soft); }
+  .av {
+    width: 46px; height: 46px; border-radius: 50%; overflow: hidden;
+    display: grid; place-items: center; font-size: 18px; font-weight: 500;
+    background: var(--paper-deep); border: 1px solid var(--gold-soft); color: var(--ink-soft);
+  }
+  .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lb li.r1 .av { border-color: var(--gold); border-width: 2px; }
   .lb li .pname { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb li .pts { font-weight: 600; font-variant-numeric: tabular-nums; }
   .lb li .pts small { font-weight: 300; color: var(--ink-soft); font-size: .7em; }
@@ -141,9 +148,11 @@
   $('url').textContent = url.replace(/^https?:\/\//, '');
   new QRCode($('qrcode'), { text: url, width: 130, height: 130, colorDark: '#2c3526', colorLight: '#ffffff' });
 
+  const avatars = {}; // pid -> dataURL
   const socket = io();
-  socket.on('connect', () => socket.emit('board:join', null, s => { state = s; render(); }));
+  socket.on('connect', () => socket.emit('board:join', null, s => { Object.assign(avatars, s.avatars || {}); state = s; render(); }));
   socket.on('state', s => { state = s; render(); });
+  socket.on('avatarUpdate', ({ pid, avatar }) => { avatars[pid] = avatar; render(); });
 
   function render() {
     if (!state) return;
@@ -177,7 +186,7 @@
 
     $('lb').innerHTML = board.slice(0, MAX_ROWS).map((p, i) =>
       '<li class="r' + (i + 1) + '" data-name="' + esc(p.name) + '">' +
-      '<span class="rank">' + (i + 1) + '</span>' +
+      '<span class="rank">' + (i + 1) + '</span>' + avHtml(p) +
       '<span class="pname">' + esc(p.name) + '</span>' +
       '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + fmtTime(p) + '</small></span></li>'
     ).join('');
@@ -200,6 +209,12 @@
 
   // Temps de réponse cumulé (départage les ex æquo) — masqué tant qu'aucun point
   function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : ''; }
+
+  // Vignette : photo si disponible, sinon l'initiale du nom
+  function avHtml(p) {
+    const a = avatars[p.pid];
+    return '<span class="av">' + (a ? '<img src="' + a + '" alt="">' : esc((p.name || '?')[0].toUpperCase())) + '</span>';
+  }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 </script>

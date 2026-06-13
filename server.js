@@ -31,9 +31,17 @@ const game = {
   startedAt: 0,
   correct: null,        // 'a' | 'b' | 'both' (figé à la révélation)
   counts: null,         // répartition des réponses (figée à la révélation)
-  players: new Map(),   // token -> { token, name, score, time }
+  players: new Map(),   // token -> { token, pid, name, score, time, avatar }
+  nextPid: 1,           // id PUBLIC du joueur (le token reste secret ; pid sert à associer les photos)
   answers: new Map(),   // token -> { choice, ms } pour la question en cours
   results: {},          // id -> { correct, answers } pour chaque question jouée (permet d'annuler)
+};
+
+// Map { pid -> avatar } envoyée une seule fois aux nouveaux arrivants (jamais dans les broadcasts d'état)
+const avatarMap = () => {
+  const m = {};
+  for (const p of game.players.values()) if (p.avatar) m[p.pid] = p.avatar;
+  return m;
 };
 
 const newQ = (text, answerRaw) => ({ id: game.nextQid++, text, answerRaw });
@@ -65,7 +73,7 @@ function currentCounts() {
 function leaderboard() {
   return [...game.players.values()]
     .sort((x, y) => y.score - x.score || x.time - y.time)
-    .map(p => ({ name: p.name, score: p.score, time: p.time }));
+    .map(p => ({ pid: p.pid, name: p.name, score: p.score, time: p.time }));
 }
 
 function playerState() {
@@ -100,7 +108,7 @@ function adminState() {
     answerCounts: currentCounts(),
     players: [...game.players.values()]
       .sort((x, y) => y.score - x.score || x.time - y.time)
-      .map(p => ({ token: p.token, name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
+      .map(p => ({ token: p.token, pid: p.pid, name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
   };
 }
 
@@ -214,7 +222,7 @@ io.on('connection', socket => {
     if (!token || !name) return cb && cb({ error: 'Prénom requis' });
     let p = game.players.get(token);
     if (!p) {
-      p = { token, name, score: 0, time: 0 };
+      p = { token, pid: game.nextPid++, name, score: 0, time: 0, avatar: null };
       game.players.set(token, p);
     } else {
       p.name = name;
@@ -224,9 +232,22 @@ io.on('connection', socket => {
     socket.join('player:' + token); // salle dédiée pour pouvoir cibler ce joueur (ex. expulsion)
     cb && cb({
       state: playerState(),
-      you: { name: p.name, score: p.score, choice: game.answers.get(token)?.choice ?? null },
+      you: { pid: p.pid, name: p.name, score: p.score, choice: game.answers.get(token)?.choice ?? null },
+      avatars: avatarMap(),
     });
     broadcast();
+  });
+
+  // Photo (vignette compressée côté client) — diffusée une seule fois, hors broadcast d'état
+  socket.on('avatar', data => {
+    const token = socket.data.token;
+    const avatar = String(data || '');
+    if (!token) return;
+    const p = game.players.get(token);
+    if (!p) return;
+    if (!avatar.startsWith('data:image/') || avatar.length > 200000) return; // garde-fou taille
+    p.avatar = avatar;
+    io.emit('avatarUpdate', { pid: p.pid, avatar }); // tous : joueurs, classement, régie
   });
 
   socket.on('answer', (choice, cb) => {
@@ -242,7 +263,7 @@ io.on('connection', socket => {
   // --- Page classement -------------------------------------------------------
   socket.on('board:join', (data, cb) => {
     socket.join('board');
-    cb && cb(boardState());
+    cb && cb({ ...boardState(), avatars: avatarMap() });
   });
 
   // --- Admin ---------------------------------------------------------------
@@ -250,7 +271,7 @@ io.on('connection', socket => {
     if (password !== ADMIN_PASSWORD) return cb && cb({ error: 'Mot de passe incorrect' });
     socket.data.admin = true;
     socket.join('admins');
-    cb && cb({ state: adminState() });
+    cb && cb({ state: adminState(), avatars: avatarMap() });
   });
 
   const admin = fn => (...args) => { if (socket.data.admin) fn(...args); };

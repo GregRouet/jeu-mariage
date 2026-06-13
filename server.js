@@ -59,7 +59,7 @@ function currentCounts() {
 function leaderboard() {
   return [...game.players.values()]
     .sort((x, y) => y.score - x.score || x.time - y.time)
-    .map(p => ({ name: p.name, score: p.score }));
+    .map(p => ({ name: p.name, score: p.score, time: p.time }));
 }
 
 function playerState() {
@@ -87,7 +87,7 @@ function adminState() {
     answerCounts: currentCounts(),
     players: [...game.players.values()]
       .sort((x, y) => y.score - x.score || x.time - y.time)
-      .map(p => ({ name: p.name, score: p.score, answered: game.answers.has(p.token) })),
+      .map(p => ({ name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
   };
 }
 

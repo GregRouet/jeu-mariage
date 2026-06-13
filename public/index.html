@@ -213,6 +213,7 @@
   .pod.p1 { animation-delay: .25s; } .pod.p2 { animation-delay: .1s; } .pod.p3 { animation-delay: .4s; }
   .pod.p1 .pname { font-size: 20px; color: var(--gold); }
   .crown { font-size: 20px; }
+  .pod .ptime { margin-top: 6px; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
   footer { text-align: center; margin-top: auto; padding-top: 34px; color: var(--gold-soft); font-size: 12px; letter-spacing: .3em; }
 </style>
@@ -424,15 +425,19 @@
   function lbRow(p, i, myRank) {
     return '<li class="' + (i < 3 ? 'top ' : '') + (i === myRank ? 'me' : '') + '">' +
       '<span class="rank">' + (i + 1) + '</span><span>' + esc(p.name) + '</span>' +
-      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + '</small></span></li>';
+      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + fmtTime(p) + '</small></span></li>';
   }
+
+  // Temps de réponse cumulé (départage les ex æquo) — masqué tant qu'aucun point
+  function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : ''; }
 
   function renderPodium() {
     const b = state.leaderboard || [];
     const pod = (i, cls, crown) => b[i] ?
       '<div class="pod ' + cls + '">' + (crown ? '<div class="crown">👑</div>' : '') +
       '<div class="pname">' + esc(b[i].name) + '</div>' +
-      '<div class="block">' + b[i].score + '<small>POINT' + (b[i].score > 1 ? 'S' : '') + '</small></div></div>' : '';
+      '<div class="block">' + b[i].score + '<small>POINT' + (b[i].score > 1 ? 'S' : '') + '</small></div>' +
+      (b[i].score > 0 ? '<div class="ptime">' + (b[i].time / 1000).toFixed(1) + 's</div>' : '') + '</div>' : '';
     $('podium').innerHTML = pod(1, 'p2') + pod(0, 'p1', true) + pod(2, 'p3');
   }
 

@@ -179,7 +179,7 @@
       '<li class="r' + (i + 1) + '" data-name="' + esc(p.name) + '">' +
       '<span class="rank">' + (i + 1) + '</span>' +
       '<span class="pname">' + esc(p.name) + '</span>' +
-      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + '</small></span></li>'
+      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + fmtTime(p) + '</small></span></li>'
     ).join('');
     $('more').textContent = board.length > MAX_ROWS ? '… et ' + (board.length - MAX_ROWS) + ' autres participants' : '';
 
@@ -197,6 +197,9 @@
       });
     });
   }
+
+  // Temps de réponse cumulé (départage les ex æquo) — masqué tant qu'aucun point
+  function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : ''; }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 </script>

@@ -426,7 +426,8 @@
     if (!ps.length) { $('plist').innerHTML = '<div class="muted">Personne pour l’instant</div>'; return; }
     $('plist').innerHTML = ps.map(p =>
       '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
-      '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') + '</span></li>'
+      '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') +
+      (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</span></li>'
     ).join('');
   }
 

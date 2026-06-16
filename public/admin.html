@@ -263,6 +263,8 @@
       <div class="panel">
         <h3>Invités — <span id="pcount" style="letter-spacing:0;text-indent:0">0</span></h3>
         <ul class="plist" id="plist"><div class="muted">Personne pour l'instant</div></ul>
+        <button class="btn ghost" id="exportBtn" style="width:100%;margin-top:12px">⬇ Exporter le classement (CSV)</button>
+        <div class="status" id="exportStatus"></div>
       </div>
     </div>
   </div>
@@ -365,6 +367,21 @@
 
   $('clearQBtn').onclick = () => {
     if (confirm('Supprimer TOUTES les questions ? La progression est remise à zéro (les scores des joueurs restent).')) socket.emit('admin:clearQuestions');
+  };
+
+  // Export du classement courant en CSV (séparateur ; + BOM pour Excel/accents)
+  $('exportBtn').onclick = () => {
+    const lb = (state && state.leaderboard) || [];
+    if (!lb.length) { flash($('exportStatus'), 'Aucun joueur à exporter', 'err'); return; }
+    const rows = [['Rang', 'Nom', 'Points', 'Temps cumulé (s)']];
+    lb.forEach((p, i) => rows.push([i + 1, p.name, p.score, (p.time / 1000).toFixed(1)]));
+    const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'classement-' + (state.couple.a + '-' + state.couple.b).replace(/[^\w]+/g, '_') + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flash($('exportStatus'), lb.length + ' joueurs exportés ✦', 'ok');
   };
 
   function delPlayer(token, name) {

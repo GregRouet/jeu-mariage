@@ -5,7 +5,8 @@ const fs = require('fs');
 
 const URL = 'http://localhost:3000';
 const assert = (cond, msg) => { if (!cond) { console.error('ÉCHEC :', msg); process.exit(1); } console.log('OK :', msg); };
-const emit = (sock, ev, arg) => new Promise(res => sock.emit(ev, arg, res));
+// Si pas de donnée, ne pas envoyer d'arg parasite avant l'ack (socket.io = ack en dernier arg)
+const emit = (sock, ev, arg) => new Promise(res => arg === undefined ? sock.emit(ev, res) : sock.emit(ev, arg, res));
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
@@ -197,6 +198,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   assert(adminState.players.find(p => p.name === 'Zoe').score === 0, 'invalidation : Zoe reperd son point');
   assert(!adminState.questions.find(q => q.id === qb.id).played, 'QB n’est plus jouée après invalidation');
   assert(adminState.phase === 'lobby', 'retour au lobby après invalidation de la question affichée');
+
+  // 10. Historique : sauvegarde, liste, consultation, suppression (stockage fichier en test)
+  admin.emit('admin:launch', qa.id);
+  await wait(120);
+  await emit(z, 'answer', 'a');
+  admin.emit('admin:reveal');
+  await wait(120);
+  const save = await emit(admin, 'admin:saveGame');
+  assert(save.ok && save.id, 'partie sauvegardée dans l’historique');
+  const list = await emit(admin, 'admin:history:list');
+  assert(list.ok && list.games.some(g => g.id === save.id), 'la partie apparaît dans la liste de l’historique');
+  const got = await emit(admin, 'admin:history:get', save.id);
+  assert(got.ok && got.game && got.game.leaderboard.find(p => p.name === 'Zoe'), 'consultation d’une partie sauvegardée (classement présent)');
+  const del = await emit(admin, 'admin:history:delete', save.id);
+  const list2 = await emit(admin, 'admin:history:list');
+  assert(del.ok && !list2.games.some(g => g.id === save.id), 'suppression d’une partie de l’historique');
 
   console.log('\nTous les tests passent ✦');
   process.exit(0);

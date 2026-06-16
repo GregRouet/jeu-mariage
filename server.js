@@ -4,6 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { Server } = require('socket.io');
+const storage = require('./storage');
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'mariage';
@@ -106,9 +107,22 @@ function adminState() {
     allPlayed: game.questions.length > 0 && playedCount === game.questions.length,
     answered: game.answers.size,
     answerCounts: currentCounts(),
+    storageDurable: storage.usingDb, // false = fichier local (non durable sur Render gratuit)
     players: [...game.players.values()]
       .sort((x, y) => y.score - x.score || x.time - y.time)
       .map(p => ({ token: p.token, pid: p.pid, name: p.name, score: p.score, time: p.time, answered: game.answers.has(p.token) })),
+  };
+}
+
+// Instantané d'une partie pour l'historique (sans les photos, pour rester léger)
+function gameSnapshot() {
+  return {
+    couple: { ...game.couple },
+    leaderboard: leaderboard().map(p => ({ name: p.name, score: p.score, time: p.time })),
+    questions: Object.keys(game.results).map(id => {
+      const q = qById(Number(id));
+      return { text: q ? q.text : '(question supprimée)', correct: game.results[id].correct };
+    }),
   };
 }
 
@@ -401,6 +415,28 @@ io.on('connection', socket => {
     game.players = new Map();
     game.answers = new Map();
     broadcast();
+  }));
+
+  // --- Historique des parties (stockage durable) ---------------------------
+  socket.on('admin:saveGame', admin(async cb => {
+    try {
+      const snap = gameSnapshot();
+      if (!snap.leaderboard.length) return cb && cb({ error: 'Aucun joueur à sauvegarder' });
+      const { id, savedAt } = await storage.saveGame(snap);
+      cb && cb({ ok: true, id, savedAt });
+    } catch (e) { cb && cb({ error: e.message }); }
+  }));
+
+  socket.on('admin:history:list', admin(async cb => {
+    try { cb && cb({ ok: true, games: await storage.listGames() }); } catch (e) { cb && cb({ error: e.message }); }
+  }));
+
+  socket.on('admin:history:get', admin(async (id, cb) => {
+    try { cb && cb({ ok: true, game: await storage.getGame(id) }); } catch (e) { cb && cb({ error: e.message }); }
+  }));
+
+  socket.on('admin:history:delete', admin(async (id, cb) => {
+    try { await storage.deleteGame(id); cb && cb({ ok: true }); } catch (e) { cb && cb({ error: e.message }); }
   }));
 
   // Supprime un joueur précis (identifié par son token)

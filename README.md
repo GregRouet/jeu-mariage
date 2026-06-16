@@ -68,6 +68,22 @@ Attention : ces modifications manuelles sont écrasées par un nouvel import. Le
 
 Dans la régie, colle le lien du document (`https://docs.google.com/spreadsheets/d/…`) et clique « Importer ». Condition : la feuille doit être partagée **« Tous les utilisateurs disposant du lien » (Lecteur)**. L'onglet importé est celui du `gid` présent dans le lien (premier onglet par défaut).
 
+## Historique des parties (stockage durable)
+
+À la fin d'une partie, bouton **« 💾 Sauvegarder cette partie »** dans la régie : le classement final (noms, points, temps) et les questions jouées sont enregistrés. Le panneau **« Historique des parties »** liste les parties sauvegardées — chacune consultable (fenêtre avec le classement), exportable en CSV, ou supprimable.
+
+Le stockage dépend de la configuration (un bandeau dans la régie indique lequel est actif) :
+- **Variable `DATABASE_URL` définie** → PostgreSQL : **durable**, survit aux redémarrages. À utiliser sur Render.
+- **Sinon** → fichier local `data/games.json` : durable en local / sur disque persistant, mais **éphémère sur l'offre gratuite Render** (effacé à chaque redéploiement/redémarrage).
+
+### Mettre en place une base Postgres gratuite (pour Render)
+
+1. Créer un compte sur [Neon](https://neon.tech) (gratuit, persistant) → nouveau projet → copier la **connection string** (`postgres://…`).
+2. Sur Render, service → **Environment** → ajouter `DATABASE_URL` = cette chaîne.
+3. Redéployer. La table `games` est créée automatiquement au premier lancement.
+
+(Fonctionne aussi avec Supabase, Render PostgreSQL, ou tout Postgres accessible.)
+
 ## Déploiement en ligne (les invités utilisent leur 4G)
 
 Sur [Render](https://render.com) (gratuit) :
@@ -84,7 +100,8 @@ Fonctionne aussi tel quel sur Railway, Fly.io, ou tout hébergeur Node.js (le po
 
 ## Architecture (notes pour modifications futures)
 
-- `server.js` — tout l'état du jeu (en mémoire, objet `game`) + événements Socket.IO.
+- `storage.js` — persistance des parties terminées : PostgreSQL si `DATABASE_URL`, sinon fichier `data/games.json`. API : `saveGame / listGames / getGame / deleteGame`. Le snapshot sauvegardé (`gameSnapshot()` dans `server.js`) contient le classement et les questions jouées, **sans les photos** (pour rester léger). Événements admin : `admin:saveGame`, `admin:history:list/get/delete`.
+- `server.js` — tout l'état EN COURS du jeu (en mémoire, objet `game`) + événements Socket.IO. Seules les parties explicitement sauvegardées sont persistées (via `storage.js`) ; l'état vif reste en mémoire.
   - Import des questions : `ingest(wb)` partagé entre `/admin/upload` (xlsx) et `/admin/import-gsheet` (lecture CSV publique du sheet, sans clé API). C'est lui qui détecte les deux formats et capte les prénoms de l'en-tête au format TRUE/FALSE.
   - Joueurs identifiés par un **token** stocké dans le `localStorage` du téléphone → survivent au verrouillage d'écran, refresh et coupures 4G (reconnexion automatique avec le score conservé).
   - La réponse Excel est stockée **brute** (`answerRaw`) et résolue à la volée (`resolveAnswer`) : on peut changer les prénoms des mariés après l'import sans casser la correspondance.

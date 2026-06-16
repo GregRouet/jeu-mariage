@@ -25,7 +25,7 @@ npm start
 5. Chaque téléphone affiche bonne/mauvaise réponse, la répartition des votes et le classement.
 6. Après la dernière question : **« Afficher les résultats finaux »** → podium sur tous les téléphones.
 
-**Score** : 1 point par bonne réponse. En cas d'égalité, le plus rapide (temps de réponse cumulé) est devant.
+**Score** : 1 point par bonne réponse. En cas d'égalité, le plus rapide est devant. Le temps affiché à côté du score est le **temps moyen par bonne réponse** (`temps total ÷ nombre de bonnes réponses`, noté `s/q`) ; à score égal, trier par moyenne ou par temps total donne le même ordre (même nombre de bonnes réponses), donc le tri serveur reste sur le temps total cumulé (`game.players[].time`).
 
 ## Format des questions (Excel ou Google Sheets)
 

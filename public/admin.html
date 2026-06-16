@@ -439,8 +439,8 @@
 
   // Export d'un classement en CSV (séparateur ; + BOM pour Excel/accents)
   function downloadCsv(couple, lb) {
-    const rows = [['Rang', 'Nom', 'Points', 'Temps cumulé (s)']];
-    lb.forEach((p, i) => rows.push([i + 1, p.name, p.score, (p.time / 1000).toFixed(1)]));
+    const rows = [['Rang', 'Nom', 'Points', 'Temps moyen (s/question)']];
+    lb.forEach((p, i) => rows.push([i + 1, p.name, p.score, p.score > 0 ? (p.time / p.score / 1000).toFixed(1) : '']));
     const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -489,7 +489,7 @@
       $('modalSub').textContent = fmtDate(g.savedAt) + ' — ' + g.leaderboard.length + ' joueurs, ' + (g.questions ? g.questions.length : 0) + ' questions';
       $('modalLb').innerHTML = g.leaderboard.map((p, i) =>
         '<li class="' + (i < 3 ? 'top' : '') + '"><span class="r">' + (i + 1) + '</span><span>' + esc(p.name) + '</span>' +
-        '<span class="p">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</small></span></li>'
+        '<span class="p">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + (p.score > 0 ? ' · ' + (p.time / p.score / 1000).toFixed(1) + 's/q' : '') + '</small></span></li>'
       ).join('');
       $('modalCsv').onclick = () => downloadCsv(g.couple, g.leaderboard);
       $('gameModal').classList.remove('hidden');
@@ -672,7 +672,7 @@
       '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
       avHtml(p) +
       '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') +
-      (p.score > 0 ? ' · ' + (p.time / 1000).toFixed(1) + 's' : '') + '</span>' +
+      (p.score > 0 ? ' · ' + (p.time / p.score / 1000).toFixed(1) + 's/q' : '') + '</span>' +
       '<button class="pdel" title="Supprimer" onclick="delPlayer(\'' + p.token + '\', \'' + esc(p.name).replace(/'/g, "\\'") + '\')">✕</button></li>'
     ).join('');
   }

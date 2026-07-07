@@ -13,10 +13,19 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/classement', (req, res) => res.sendFile(path.join(__dirname, 'public', 'classement.html')));
-app.get('/affiche', (req, res) => res.sendFile(path.join(__dirname, 'public', 'affiche.html')));
+// HTML re-validé à chaque chargement : après un redéploiement, tous les écrans récupèrent
+// la dernière version (sinon le cache navigateur peut servir l'ancienne — thème pas appliqué
+// partout). Les autres fichiers (JPEG des feuilles, etc.) gardent le cache par défaut.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
+const sendPage = name => (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', name), { headers: { 'Cache-Control': 'no-cache' } });
+app.get('/admin', sendPage('admin.html'));
+app.get('/classement', sendPage('classement.html'));
+app.get('/affiche', sendPage('affiche.html'));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 

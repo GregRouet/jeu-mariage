@@ -405,7 +405,13 @@
       $('login').classList.add('hidden');
       $('app').classList.remove('hidden');
       Object.assign(avatars, res.avatars || {});
-      applyTheme(res.theme);
+      // Sur Render (offre gratuite) l'état serveur est en mémoire : après une mise en veille
+      // ou un redéploiement, game.theme retombe sur 'gold'. On ré-impose ici le dernier thème
+      // choisi (mémorisé en localStorage) pour le rétablir sur tous les écrans.
+      let remembered = null;
+      try { remembered = localStorage.getItem('jm_theme'); } catch (e) {}
+      applyTheme(res.theme); // reflète l'état serveur (et écrit le cache)
+      if (remembered && remembered !== res.theme) socket.emit('admin:setTheme', remembered);
       state = res.state;
       initStatic();
       render();

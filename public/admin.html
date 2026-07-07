@@ -18,6 +18,7 @@
     --gold-soft: #c9ab6e;
     --blush: #b06a52;
     --line: #cfc4ab;
+    --surface-dark: #2c3526;      /* fond des boutons remplis */
     --wash: rgba(168,133,60,.12); /* surbrillance question en cours */
   }
   /* Thème forestier (vert forêt + doré, feuillage aquarelle) — repris du plan de table */
@@ -30,6 +31,7 @@
     --gold-soft: #b98d4f; /* accent secondaire = doré */
     --blush: #b06a52;
     --line: #cdd3bd;
+    --surface-dark: #1d5c2d; /* vert forêt : boutons remplis */
     --wash: rgba(29,92,45,.12);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -108,7 +110,7 @@
   .btn {
     font-family: 'Jost'; font-size: 12px; font-weight: 600;
     letter-spacing: .22em; text-indent: .22em; text-transform: uppercase;
-    color: var(--paper); background: var(--ink); border: 1px solid var(--ink);
+    color: var(--paper); background: var(--surface-dark); border: 1px solid var(--surface-dark);
     padding: 11px 18px; cursor: pointer; transition: opacity .2s, transform .1s;
   }
   .btn:hover { opacity: .9; }

@@ -31,6 +31,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   let adminState = login.state;
   admin.on('state', s => adminState = s);
 
+  admin.emit('admin:swapCouple');
+  await wait(150);
+  assert(adminState.couple.a === 'Jules' && adminState.couple.b === 'Camille', 'inversion des prénoms (↔) : Jules ↔ Camille');
+
   admin.emit('admin:couple', { a: 'Camille', b: 'Jules' });
   await wait(200);
   assert(adminState.couple.a === 'Camille', 'prénoms des mariés enregistrés');

@@ -303,7 +303,10 @@
           <div><label>Marié·e 1</label><input type="text" id="nameA" maxlength="24"></div>
           <div><label>Marié·e 2</label><input type="text" id="nameB" maxlength="24"></div>
         </div>
-        <button class="btn ghost" id="saveCouple">Enregistrer les prénoms</button>
+        <div class="row" style="margin-bottom:0">
+          <button class="btn ghost" id="saveCouple" style="flex:1">Enregistrer les prénoms</button>
+          <button class="btn ghost" id="swapCouple" title="Inverser marié·e 1 et 2" style="flex:0 0 54px">↔</button>
+        </div>
         <div class="status" id="coupleStatus"></div>
         <hr style="border:none;border-top:1px dashed var(--line);margin:16px 0">
         <label>Fichier de questions (.xlsx — colonne A : question, colonne B : réponse ou vide)</label>
@@ -459,6 +462,10 @@
     socket.emit('admin:couple', { a: $('nameA').value, b: $('nameB').value });
     flash($('coupleStatus'), 'Prénoms enregistrés ✦', 'ok');
   };
+  $('swapCouple').onclick = () => {
+    socket.emit('admin:swapCouple');
+    flash($('coupleStatus'), 'Prénoms inversés ✦', 'ok');
+  };
 
   $('uploadBtn').onclick = async () => {
     const f = $('file').files[0];
@@ -587,6 +594,10 @@
       : 'Stockage : fichier local — non durable sur Render gratuit (définis DATABASE_URL)';
     $('storageNote').className = 'status ' + (state.storageDurable ? 'ok' : 'err');
     if (document.activeElement !== $('durationInput')) $('durationInput').value = state.duration || 0;
+    // reflète les prénoms courants (import auto-détecté, inversion) sans écraser une saisie en cours
+    if (document.activeElement !== $('nameA') && document.activeElement !== $('nameB')) {
+      $('nameA').value = state.couple.a; $('nameB').value = state.couple.b;
+    }
     renderStage();
     renderActionBar();
     renderQuestions();

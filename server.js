@@ -420,6 +420,13 @@ io.on('connection', socket => {
     broadcast();
   }));
 
+  // Inverse marié·e 1 ↔ marié·e 2 (les réponses restent correctes, seul l'ordre change)
+  socket.on('admin:swapCouple', admin(() => {
+    game.couple = { a: game.couple.b, b: game.couple.a };
+    persistSettings();
+    broadcast();
+  }));
+
   socket.on('admin:addQuestion', admin(data => {
     const text = String(data?.text || '').trim();
     if (!text) return;

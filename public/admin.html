@@ -18,6 +18,7 @@
     --gold-soft: #c9ab6e;
     --blush: #b06a52;
     --line: #cfc4ab;
+    --wash: rgba(168,133,60,.12); /* surbrillance question en cours */
   }
   /* Thème forestier (vert forêt + doré, feuillage aquarelle) — repris du plan de table */
   :root[data-theme="forest"] {
@@ -29,6 +30,7 @@
     --gold-soft: #b98d4f; /* accent secondaire = doré */
     --blush: #b06a52;
     --line: #cdd3bd;
+    --wash: rgba(29,92,45,.12);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -163,7 +165,7 @@
     background: rgba(255,255,255,.5); border: 1px solid var(--line); padding: 9px 8px; outline: none;
   }
   .qlist li.done { opacity: .45; }
-  .qlist li.now { background: rgba(168,133,60,.12); outline: 1px solid var(--gold-soft); }
+  .qlist li.now { background: var(--wash); outline: 1px solid var(--gold-soft); }
   .qlist .qi { font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--ink-soft); }
   .chip {
     font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
@@ -379,7 +381,11 @@
   let password = sessionStorage.getItem('jm_admin_pwd') || '';
   const socket = io();
 
-  // Habillage partagé (doré ⇄ forestier) : le changement est poussé en direct à tous les écrans
+  // Habillage partagé (doré ⇄ forestier) : le changement est poussé en direct à tous les écrans.
+  // chosenTheme = intention de l'admin (dernier choix), capturée AVANT que le serveur ne pousse
+  // son thème à la connexion — sert à ré-imposer le thème après un redémarrage Render (état RAM).
+  let chosenTheme = null;
+  try { chosenTheme = localStorage.getItem('jm_theme'); } catch (e) {}
   const themeBtns = [$('themeGold'), $('themeForest')];
   function applyTheme(t) {
     t = (t === 'forest') ? 'forest' : 'gold';
@@ -389,7 +395,7 @@
     // car .btn.ghost, déclaré après .btn.gold, écraserait sinon le fond du bouton actif
     themeBtns.forEach(b => b.className = 'btn ' + (b.dataset.theme === t ? 'gold' : 'ghost'));
   }
-  themeBtns.forEach(b => b.onclick = () => socket.emit('admin:setTheme', b.dataset.theme));
+  themeBtns.forEach(b => b.onclick = () => { chosenTheme = b.dataset.theme; socket.emit('admin:setTheme', b.dataset.theme); });
   socket.on('theme:set', applyTheme);
 
   function login(pwd) {
@@ -406,12 +412,10 @@
       $('app').classList.remove('hidden');
       Object.assign(avatars, res.avatars || {});
       // Sur Render (offre gratuite) l'état serveur est en mémoire : après une mise en veille
-      // ou un redéploiement, game.theme retombe sur 'gold'. On ré-impose ici le dernier thème
-      // choisi (mémorisé en localStorage) pour le rétablir sur tous les écrans.
-      let remembered = null;
-      try { remembered = localStorage.getItem('jm_theme'); } catch (e) {}
+      // ou un redéploiement, game.theme retombe sur 'gold'. On ré-impose ici le thème choisi
+      // par l'admin (chosenTheme) pour le rétablir sur tous les écrans.
       applyTheme(res.theme); // reflète l'état serveur (et écrit le cache)
-      if (remembered && remembered !== res.theme) socket.emit('admin:setTheme', remembered);
+      if (chosenTheme && chosenTheme !== res.theme) socket.emit('admin:setTheme', chosenTheme);
       state = res.state;
       initStatic();
       render();

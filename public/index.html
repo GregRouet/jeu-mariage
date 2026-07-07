@@ -18,6 +18,9 @@
     --gold-soft: #c9ab6e;
     --blush: #b06a52;
     --line: #cfc4ab;
+    --halo-1: rgba(201,171,110,.28); /* halo d'ambiance (haut) */
+    --halo-2: rgba(176,106,82,.12);  /* halo d'ambiance (bas) */
+    --wash: rgba(168,133,60,.12);    /* surbrillance « ma ligne » */
   }
   /* Thème forestier (vert forêt + doré, feuillage aquarelle) — repris du plan de table */
   :root[data-theme="forest"] {
@@ -29,6 +32,9 @@
     --gold-soft: #b98d4f; /* accent secondaire = doré */
     --blush: #b06a52;
     --line: #cdd3bd;
+    --halo-1: rgba(120,160,110,.20);
+    --halo-2: rgba(185,141,79,.10);
+    --wash: rgba(29,92,45,.12);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { height: 100%; }
@@ -44,8 +50,8 @@
     content: '';
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background:
-      radial-gradient(120% 60% at 50% -10%, rgba(201,171,110,.28), transparent 60%),
-      radial-gradient(80% 50% at 50% 115%, rgba(176,106,82,.12), transparent 60%);
+      radial-gradient(120% 60% at 50% -10%, var(--halo-1), transparent 60%),
+      radial-gradient(80% 50% at 50% 115%, var(--halo-2), transparent 60%);
   }
   body::after {
     content: '';
@@ -225,7 +231,7 @@
   .photo-prev img { width: 100%; height: 100%; object-fit: cover; }
   .photo-change { display: inline-block; margin-top: 18px; cursor: pointer; color: var(--gold); font-size: 13px; }
   .lb li.top .rank { color: var(--gold); font-weight: 700; }
-  .lb li.me { background: rgba(168,133,60,.12); outline: 1px solid var(--gold-soft); }
+  .lb li.me { background: var(--wash); outline: 1px solid var(--gold-soft); }
   .lb li .pts { font-weight: 600; }
   .lb li .pts small { font-weight: 300; color: var(--ink-soft); }
 

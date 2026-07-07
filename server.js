@@ -239,6 +239,11 @@ app.post('/admin/import-gsheet', express.json(), async (req, res) => {
 // ---------------------------------------------------------------------------
 io.on('connection', socket => {
 
+  // Thème poussé dès la connexion (avant tout join/board:join/login) pour que TOUTES
+  // les pages — dont l'écran d'accueil du joueur avant qu'il saisisse son prénom —
+  // affichent le bon habillage sans attendre.
+  socket.emit('theme:set', game.theme);
+
   // --- Joueurs -------------------------------------------------------------
   socket.on('join', (data, cb) => {
     const token = String(data?.token || '');

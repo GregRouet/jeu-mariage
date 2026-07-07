@@ -141,14 +141,14 @@
   /* Feuillages d'angle — thème forestier uniquement (le blanc du JPEG disparaît via multiply) */
   .leaf-deco { display: none; }
   :root[data-theme="forest"] .leaf-deco {
-    display: block; position: fixed; z-index: -1;
+    display: block; position: fixed; z-index: 0;
     background-size: contain; background-repeat: no-repeat;
-    mix-blend-mode: multiply; opacity: .85; pointer-events: none;
+    opacity: .9; pointer-events: none;
   }
-  .leaf-deco.tl { top: 0; left: 0;  width: min(420px,32vw); height: min(362px,28vw); background-image: url('/deco/leaf-tl.jpg'); background-position: top left; }
-  .leaf-deco.tr { top: 0; right: 0; width: min(480px,36vw); height: min(210px,16vw); background-image: url('/deco/leaf-tr.jpg'); background-position: top right; }
-  .leaf-deco.bl { bottom: 0; left: 0;  width: min(450px,34vw); height: min(292px,22vw); background-image: url('/deco/leaf-bl.jpg'); background-position: bottom left; }
-  .leaf-deco.br { bottom: 0; right: 0; width: min(480px,38vw); height: min(235px,19vw); background-image: url('/deco/leaf-br.jpg'); background-position: bottom right; }
+  .leaf-deco.tl { top: 0; left: 0;  width: min(420px,32vw); height: min(362px,28vw); background-image: url('/deco/leaf-tl.png'); background-position: top left; }
+  .leaf-deco.tr { top: 0; right: 0; width: min(480px,36vw); height: min(210px,16vw); background-image: url('/deco/leaf-tr.png'); background-position: top right; }
+  .leaf-deco.bl { bottom: 0; left: 0;  width: min(450px,34vw); height: min(292px,22vw); background-image: url('/deco/leaf-bl.png'); background-position: bottom left; }
+  .leaf-deco.br { bottom: 0; right: 0; width: min(480px,38vw); height: min(235px,19vw); background-image: url('/deco/leaf-br.png'); background-position: bottom right; }
 </style>
 </head>
 <body>

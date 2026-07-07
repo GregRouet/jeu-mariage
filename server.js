@@ -24,6 +24,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 // État du jeu (en mémoire — un redémarrage du serveur remet tout à zéro)
 // ---------------------------------------------------------------------------
 const game = {
+  theme: 'gold',        // 'gold' | 'forest' — habillage partagé, choisi par l'admin (hors progression)
   couple: { a: 'Marié·e A', b: 'Marié·e B' },
   questions: [],        // { id, text, answerRaw } — id stable (l'index de tableau bouge si on supprime)
   nextQid: 1,           // compteur d'id
@@ -248,6 +249,7 @@ io.on('connection', socket => {
       state: playerState(),
       you: { pid: p.pid, name: p.name, score: p.score, choice: game.answers.get(token)?.choice ?? null },
       avatars: avatarMap(),
+      theme: game.theme,
     });
     broadcast();
   });
@@ -277,7 +279,7 @@ io.on('connection', socket => {
   // --- Page classement -------------------------------------------------------
   socket.on('board:join', (data, cb) => {
     socket.join('board');
-    cb && cb({ ...boardState(), avatars: avatarMap() });
+    cb && cb({ ...boardState(), avatars: avatarMap(), theme: game.theme });
   });
 
   // --- Admin ---------------------------------------------------------------
@@ -285,10 +287,16 @@ io.on('connection', socket => {
     if (password !== ADMIN_PASSWORD) return cb && cb({ error: 'Mot de passe incorrect' });
     socket.data.admin = true;
     socket.join('admins');
-    cb && cb({ state: adminState(), avatars: avatarMap() });
+    cb && cb({ state: adminState(), avatars: avatarMap(), theme: game.theme });
   });
 
   const admin = fn => (...args) => { if (socket.data.admin) fn(...args); };
+
+  // Habillage partagé (doré ⇄ forestier) : appliqué en direct sur tous les écrans
+  socket.on('admin:setTheme', admin(t => {
+    game.theme = t === 'forest' ? 'forest' : 'gold';
+    io.emit('theme:set', game.theme); // joueurs, classement, régie
+  }));
 
   socket.on('admin:couple', admin(data => {
     game.couple = {

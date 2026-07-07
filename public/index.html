@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('jm_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
   :root {
     --paper: #f6f1e6;
@@ -17,6 +18,17 @@
     --gold-soft: #c9ab6e;
     --blush: #b06a52;
     --line: #cfc4ab;
+  }
+  /* Thème forestier (vert forêt + doré, feuillage aquarelle) — repris du plan de table */
+  :root[data-theme="forest"] {
+    --paper: #f8f4e7;
+    --paper-deep: #e7eddc;
+    --ink: #4a3626;
+    --ink-soft: #75816b;
+    --gold: #1d5c2d;      /* accent primaire = vert forêt */
+    --gold-soft: #b98d4f; /* accent secondaire = doré */
+    --blush: #b06a52;
+    --line: #cdd3bd;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { height: 100%; }
@@ -242,9 +254,25 @@
   .pod.p1 .av.heart { font-size: 38px; }
 
   footer { text-align: center; margin-top: auto; padding-top: 34px; color: var(--gold-soft); font-size: 12px; letter-spacing: .3em; }
+
+  /* Feuillages d'angle — thème forestier uniquement (le blanc du JPEG disparaît via multiply) */
+  .leaf-deco { display: none; }
+  :root[data-theme="forest"] .leaf-deco {
+    display: block; position: fixed; z-index: -1;
+    background-size: contain; background-repeat: no-repeat;
+    mix-blend-mode: multiply; opacity: .85; pointer-events: none;
+  }
+  .leaf-deco.tl { top: 0; left: 0;  width: min(300px,42vw); height: min(258px,36vw); background-image: url('/deco/leaf-tl.jpg'); background-position: top left; }
+  .leaf-deco.tr { top: 0; right: 0; width: min(340px,46vw); height: min(150px,20vw); background-image: url('/deco/leaf-tr.jpg'); background-position: top right; }
+  .leaf-deco.bl { bottom: 0; left: 0;  width: min(320px,44vw); height: min(208px,29vw); background-image: url('/deco/leaf-bl.jpg'); background-position: bottom left; }
+  .leaf-deco.br { bottom: 0; right: 0; width: min(340px,48vw); height: min(167px,24vw); background-image: url('/deco/leaf-br.jpg'); background-position: bottom right; }
 </style>
 </head>
 <body>
+<div class="leaf-deco tl" aria-hidden="true"></div>
+<div class="leaf-deco tr" aria-hidden="true"></div>
+<div class="leaf-deco bl" aria-hidden="true"></div>
+<div class="leaf-deco br" aria-hidden="true"></div>
 <div class="wrap">
 
   <header>
@@ -334,6 +362,14 @@
 
   const socket = io();
 
+  // Habillage partagé, piloté par l'admin (doré ⇄ forestier)
+  function applyTheme(t) {
+    t = (t === 'forest') ? 'forest' : 'gold';
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('jm_theme', t); } catch (e) {}
+  }
+  socket.on('theme:set', applyTheme);
+
   function join(name) {
     socket.emit('join', { token, name }, res => {
       if (res.error) { $('joinErr').textContent = res.error; return; }
@@ -343,6 +379,7 @@
       myChoice = res.you.choice;
       myPid = res.you.pid;
       Object.assign(avatars, res.avatars || {});
+      applyTheme(res.theme);
       localStorage.setItem('jm_name', myName);
       if (pendingAvatar) { socket.emit('avatar', pendingAvatar); pendingAvatar = null; }
       state = res.state;

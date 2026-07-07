@@ -256,6 +256,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   assert(adminState.phase === 'reveal' && adminState.correct === 'a', 'minuteur : auto-révélation à l’échéance');
   admin.emit('admin:setDuration', 0); await wait(80);
 
+  // 13. Format « une colonne par marié·e » : l'ordre des prénoms suit les colonnes (B puis C),
+  // même quand la colonne A s'appelle « Question »
+  const XLSX = require('xlsx');
+  const wb2 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet([
+    ['Question', 'Alix', 'Noah'],
+    ['Aime les légos', 'TRUE', 'FALSE'],
+  ]), 'F');
+  const fd2 = new FormData();
+  fd2.append('file', new Blob([XLSX.write(wb2, { type: 'buffer', bookType: 'xlsx' })]), 'f.xlsx');
+  fd2.append('password', 'mariage');
+  const up2 = await (await fetch(URL + '/admin/upload', { method: 'POST', body: fd2 })).json();
+  await wait(150);
+  assert(up2.ok, 'import format « 2 colonnes » accepté');
+  assert(adminState.couple.a === 'Alix' && adminState.couple.b === 'Noah',
+    'format 2 : prénoms dans l’ordre des colonnes (Alix=B, Noah=C) malgré colonne A « Question »');
+
   console.log('\nTous les tests passent ✦');
   process.exit(0);
 })().catch(e => { console.error('ERREUR :', e); process.exit(1); });

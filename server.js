@@ -227,13 +227,15 @@ function ingest(wb) {
   const hasBoolRows = raw.some(isBoolRow);
 
   let start = 0, coupleFromHeader = false;
-  if (fold(raw[0][0]).startsWith('question')) {
-    start = 1; // en-tête « Question | Réponse »
-  } else if (hasBoolRows && !isBoolRow(raw[0]) && raw[0][1] && raw[0][2]) {
-    // en-tête du format TRUE/FALSE : les colonnes B et C portent les prénoms des mariés
+  // Priorité au format « une colonne par marié·e » : si l'en-tête (1re ligne non TRUE/FALSE)
+  // porte deux libellés en colonnes B et C, ce sont les prénoms — DANS L'ORDRE DES COLONNES —
+  // même si la colonne A s'appelle « Question ».
+  if (hasBoolRows && !isBoolRow(raw[0]) && raw[0][1] && raw[0][2]) {
     game.couple = { a: raw[0][1].slice(0, 24), b: raw[0][2].slice(0, 24) };
     coupleFromHeader = true;
     start = 1;
+  } else if (fold(raw[0][0]).startsWith('question')) {
+    start = 1; // en-tête « Question | Réponse » (une seule colonne réponse)
   }
 
   const isNumeric = s => s !== '' && /^\s*-?\d+([.,]\d+)?\s*$/.test(s) && Number.isFinite(parseFloat(s.replace(',', '.')));

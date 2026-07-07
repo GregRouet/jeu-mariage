@@ -22,10 +22,14 @@ npm start
 4. La régie affiche en direct le nombre de réponses reçues. Puis :
    - si la réponse est dans l'Excel → bouton **« Révéler la réponse »** (score automatique) ;
    - sinon (mode « en direct ») → cliquer sur la bonne réponse pour clôturer.
-5. Chaque téléphone affiche bonne/mauvaise réponse, la répartition des votes et le classement.
+5. Chaque téléphone affiche bonne/mauvaise réponse, la répartition des votes et le classement. **L'écran projeté (`/classement`) affiche aussi la question en grand, un compte à rebours, puis la révélation** (barres de répartition + joueur le plus rapide, ou cible + estimations les plus proches).
 6. Après la dernière question : **« Afficher les résultats finaux »** → podium sur tous les téléphones.
 
-**Score** : 1 point par bonne réponse. En cas d'égalité, le plus rapide est devant. Le temps affiché à côté du score est le **temps moyen par bonne réponse** (`temps total ÷ nombre de bonnes réponses`, noté `s/q`) ; à score égal, trier par moyenne ou par temps total donne le même ordre (même nombre de bonnes réponses), donc le tri serveur reste sur le temps total cumulé (`game.players[].time`).
+**Score** : bonus de rapidité borné — une bonne réponse rapporte **500 à 1000 points** selon le temps de réponse (réponse instantanée ≈ 1000, à l'échéance ≈ 500 ; plancher à 500 pour l'équité 4G). La fenêtre de décroissance = la durée du minuteur si défini, sinon 20 s. Mauvaise réponse = 0. Classement trié par points décroissants, départagé par le temps cumulé (`game.players[].time`). Les points exacts attribués sont mémorisés par réponse pour que l'invalidation les retire précisément.
+
+**Minuteur** (optionnel, réglé dans la régie → *Réglages*, en secondes ; 0 = manuel) : à l'échéance, le vote se ferme ; les questions à réponse connue sont **révélées automatiquement**, les questions « en direct » attendent le clic de l'admin.
+
+**Question d'estimation** (« le plus proche gagne ») : type de question où les joueurs saisissent un **nombre**. Le plus proche de la cible marque le plus (points dégressifs par rang : 1000 / 800 / 600 / 400, plancher 300). Voir le format ci-dessous.
 
 ## Format des questions (Excel ou Google Sheets)
 
@@ -39,7 +43,7 @@ Deux formats acceptés, détectés automatiquement (première feuille, une quest
 | Qui est le plus têtu ? | les deux |
 | Qui chante le plus faux sous la douche ? | *(vide → validation en direct par l'admin)* |
 
-- Colonne B : le **prénom exact** d'un des mariés (accents/majuscules ignorés), ou `les deux`, ou **vide**.
+- Colonne B : le **prénom exact** d'un des mariés (accents/majuscules ignorés), ou `les deux`, ou **vide**, ou **un nombre** (→ question d'estimation « le plus proche gagne », ex. `30`).
 - Une ligne d'en-tête commençant par « Question » est ignorée.
 
 **Format 2 — une colonne TRUE/FALSE par marié·e** :
@@ -100,7 +104,10 @@ Fonctionne aussi tel quel sur Railway, Fly.io, ou tout hébergeur Node.js (le po
 
 ## Architecture (notes pour modifications futures)
 
-- `storage.js` — persistance des parties terminées : PostgreSQL si `DATABASE_URL`, sinon fichier `data/games.json`. API : `saveGame / listGames / getGame / deleteGame`. Le snapshot sauvegardé (`gameSnapshot()` dans `server.js`) contient le classement et les questions jouées, **sans les photos** (pour rester léger). Événements admin : `admin:saveGame`, `admin:history:list/get/delete`.
+- `storage.js` — persistance : PostgreSQL si `DATABASE_URL`, sinon fichiers `data/*.json`. API parties terminées : `saveGame / listGames / getGame / deleteGame` ; API **réglages** : `saveSettings / loadSettings`. Le snapshot d'une partie (`gameSnapshot()`) contient le classement et les questions jouées, **sans les photos**. Événements admin : `admin:saveGame`, `admin:history:list/get/delete`.
+- **Réglages persistants** : `game` sérialise `{ theme, duration, couple, questions, nextQid }` via `persistSettings()` (debounce, fire-and-forget) à chaque changement (thème, minuteur, prénoms, import/ajout/suppression de questions) ; `storage.loadSettings()` les restaure **au démarrage** (avant `listen`). Durable seulement avec `DATABASE_URL` (le disque Render gratuit est éphémère). L'état **vif** (scores, question en cours, phase) reste en mémoire et n'est pas persisté.
+- **Scoring / minuteur / estimation** (dans `server.js`) : `speedPoints(ms)` = bonus de rapidité borné (fenêtre = `game.duration` ou 20 s). `game.duration` (event `admin:setDuration`) arme un `revealTimer` au `launch` ; `doReveal(correct)` calcule et **mémorise les points par réponse** (`game.results[id].answers` → `{choice|value, ms, pts}`) pour une invalidation exacte. Questions `kind:'number'` (estimation) : réponse numérique, scoring par rang de proximité. L'état expose `kind/duration/deadline/now` (compte à rebours corrigé de la dérive d'horloge), `fastest` (plus rapide) et `closest` (meilleures estimations) au reveal.
+- `public/classement.html` affiche, en plus du leaderboard, un **plateau** (`#stage`) : question + choix + compte à rebours pendant la question, réponse + barres/plus rapide (ou cible + plus proches) au reveal.
 - `server.js` — tout l'état EN COURS du jeu (en mémoire, objet `game`) + événements Socket.IO. Seules les parties explicitement sauvegardées sont persistées (via `storage.js`) ; l'état vif reste en mémoire.
   - Import des questions : `ingest(wb)` partagé entre `/admin/upload` (xlsx) et `/admin/import-gsheet` (lecture CSV publique du sheet, sans clé API). C'est lui qui détecte les deux formats et capte les prénoms de l'en-tête au format TRUE/FALSE.
   - Joueurs identifiés par un **token** stocké dans le `localStorage` du téléphone → survivent au verrouillage d'écran, refresh et coupures 4G (reconnexion automatique avec le score conservé).

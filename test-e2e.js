@@ -69,7 +69,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   assert(players[0].state.phase === 'reveal' && players[0].state.correct === 'a', 'révélation auto : bonne réponse = a');
   assert(players[0].state.counts.a === 2 && players[0].state.counts.both === 1, 'répartition des votes correcte (double réponse ignorée)');
   const lb1 = players[0].state.leaderboard;
-  assert(lb1.find(p => p.name === 'Alice').score === 1 && lb1.find(p => p.name === 'Chloé').score === 0, 'scores Q1 : Alice 1, Chloé 0');
+  const aliceQ1 = lb1.find(p => p.name === 'Alice').score;
+  assert(aliceQ1 >= 500 && aliceQ1 <= 1000 && lb1.find(p => p.name === 'Chloé').score === 0,
+    'scores Q1 : Alice marque des points de rapidité (500-1000), Chloé 0 (reçu ' + aliceQ1 + ')');
 
   // 5. Question 2 et 3 : Chloé seule répond juste à chaque fois → doit passer en tête
   for (const correct of ['b', 'both']) {
@@ -81,7 +83,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await wait(150);
   }
   const lb3 = players[0].state.leaderboard;
-  assert(lb3[0].name === 'Chloé' && lb3[0].score === 2, 'Chloé en tête avec 2 points après Q3');
+  assert(lb3[0].name === 'Chloé' && lb3[0].score > lb3.find(p => p.name === 'Alice').score,
+    'Chloé en tête après Q3 (2 bonnes réponses > 1 pour Alice)');
 
   // 6. Question 4 : validation en direct (pas de réponse dans l'Excel)
   admin.emit('admin:next');
@@ -93,7 +96,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   admin.emit('admin:reveal', 'b');
   await wait(150);
   assert(players[0].state.correct === 'b', 'révélation en direct avec choix admin');
-  assert(players[0].state.leaderboard.find(p => p.name === 'Alice').score === 2, 'Alice à 2 points après Q4');
+  assert(players[0].state.leaderboard.find(p => p.name === 'Alice').score >= 1000, 'Alice cumule ses 2 bonnes réponses (Q1+Q4, ≥ 1000)');
 
   // 6b. Page classement : leaderboard reçu et mis à jour en temps réel
   const board = io(URL);
@@ -120,7 +123,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   players[1].sock.disconnect();
   const bob2 = io(URL);
   const re = await emit(bob2, 'join', { token: 'tok-Bob', name: 'Bob' });
-  assert(re.you.score === 1, 'Bob reconnecté retrouve son score (1)');
+  assert(re.you.score >= 500, 'Bob reconnecté retrouve son score (> 0)');
 
   // 7b. Suppression d'un joueur précis (par token) puis vidage complet
   assert(adminState.players.some(p => p.name === 'Alice' && p.token), 'le token des joueurs est exposé à l’admin');
@@ -189,7 +192,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await emit(z, 'answer', 'b');
   admin.emit('admin:reveal');
   await wait(150);
-  assert(adminState.players.find(p => p.name === 'Zoe').score === 1, 'Zoe marque 1 point sur QB');
+  assert(adminState.players.find(p => p.name === 'Zoe').score >= 500, 'Zoe marque des points sur QB');
   assert(adminState.questions.find(q => q.id === qb.id).played, 'QB marquée comme jouée');
 
   // invalider QB : Zoe reperd son point, QB redevient jouable
@@ -214,6 +217,38 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const del = await emit(admin, 'admin:history:delete', save.id);
   const list2 = await emit(admin, 'admin:history:list');
   assert(del.ok && !list2.games.some(g => g.id === save.id), 'suppression d’une partie de l’historique');
+
+  // 11. Question d'estimation (« le plus proche gagne »)
+  admin.emit('admin:reset'); await wait(120);
+  admin.emit('admin:clearQuestions'); await wait(120);
+  admin.emit('admin:addQuestion', { text: 'Combien d’invités ce soir ?', answer: 'number', value: '30' });
+  await wait(150);
+  const qn = adminState.questions[0];
+  assert(qn.kind === 'number' && qn.answer === 30, 'question d’estimation ajoutée (type number, cible 30)');
+  const theo = io(URL);
+  await emit(theo, 'join', { token: 'tok-Theo', name: 'Théo' });
+  admin.emit('admin:launch', qn.id); await wait(120);
+  await emit(z, 'answer', 28);      // Zoe : proche
+  await emit(theo, 'answer', 10);   // Théo : loin
+  admin.emit('admin:reveal'); await wait(150);
+  const zoeN = adminState.players.find(p => p.name === 'Zoe').score;
+  const theoN = adminState.players.find(p => p.name === 'Théo').score;
+  assert(zoeN > theoN && theoN > 0, 'estimation : Zoe (28) plus proche de 30 que Théo (10) → plus de points, tous deux > 0');
+  assert(boardState.correct === 30 && Array.isArray(boardState.closest) && boardState.closest[0].name === 'Zoe',
+    'estimation révélée : cible 30 + « closest » exposé (Zoe en tête)');
+
+  // 12. Minuteur : durée réglée, échéance exposée, auto-révélation à l'échéance
+  admin.emit('admin:setDuration', 1); await wait(120);
+  assert(adminState.duration === 1, 'durée du minuteur réglée (1 s)');
+  admin.emit('admin:clearQuestions'); await wait(120);
+  admin.emit('admin:addQuestion', { text: 'QT', answer: 'a' }); await wait(120);
+  const qt = adminState.questions[0];
+  admin.emit('admin:launch', qt.id); await wait(120);
+  assert(adminState.deadline > 0 && adminState.phase === 'question', 'minuteur : échéance fixée au lancement');
+  await emit(z, 'answer', 'a');
+  await wait(1300); // laisse le minuteur (1 s) expirer → auto-révélation (réponse connue = a)
+  assert(adminState.phase === 'reveal' && adminState.correct === 'a', 'minuteur : auto-révélation à l’échéance');
+  admin.emit('admin:setDuration', 0); await wait(80);
 
   console.log('\nTous les tests passent ✦');
   process.exit(0);

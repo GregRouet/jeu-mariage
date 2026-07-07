@@ -34,19 +34,41 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 // ---------------------------------------------------------------------------
 const game = {
   theme: 'gold',        // 'gold' | 'forest' — habillage partagé, choisi par l'admin (hors progression)
+  duration: 0,          // secondes par question ; 0 = pas de minuteur (révélation manuelle)
   couple: { a: 'Marié·e A', b: 'Marié·e B' },
-  questions: [],        // { id, text, answerRaw } — id stable (l'index de tableau bouge si on supprime)
+  questions: [],        // { id, text, answerRaw, kind } — kind 'choice'|'number' ; id stable
   nextQid: 1,           // compteur d'id
   current: null,        // id de la question active (ou venant d'être révélée), null sinon
   phase: 'lobby',       // lobby | question | reveal | ended
   startedAt: 0,
-  correct: null,        // 'a' | 'b' | 'both' (figé à la révélation)
+  deadline: 0,          // startedAt + duration*1000 si minuteur, sinon 0 (le vote se ferme à l'échéance)
+  correct: null,        // 'a'|'b'|'both' (choice) ou la valeur cible (number), figé à la révélation
   counts: null,         // répartition des réponses (figée à la révélation)
   players: new Map(),   // token -> { token, pid, name, score, time, avatar }
   nextPid: 1,           // id PUBLIC du joueur (le token reste secret ; pid sert à associer les photos)
-  answers: new Map(),   // token -> { choice, ms } pour la question en cours
-  results: {},          // id -> { correct, answers } pour chaque question jouée (permet d'annuler)
+  answers: new Map(),   // token -> { choice|value, ms } pour la question en cours
+  results: {},          // id -> { correct, kind, answers: Map(token->{choice|value, ms, pts}) }
 };
+let revealTimer = null; // handle du setTimeout d'auto-révélation (minuteur)
+
+// Bonus de rapidité borné : réponse instantanée ≈ 1000, à l'échéance ≈ 500 (plancher = équité 4G).
+// La fenêtre = la durée du minuteur si défini, sinon 20 s par défaut.
+const POINTS_MAX = 1000, POINTS_MIN = 500;
+function speedPoints(ms) {
+  const window = (game.duration > 0 ? game.duration * 1000 : 20000);
+  return POINTS_MIN + Math.round((POINTS_MAX - POINTS_MIN) * (1 - Math.min(1, Math.max(0, ms) / window)));
+}
+
+// --- Réglages persistants (survivent aux redémarrages si DATABASE_URL est défini) ---
+const currentSettings = () => ({
+  theme: game.theme, duration: game.duration, couple: { ...game.couple },
+  questions: game.questions, nextQid: game.nextQid,
+});
+let saveTimer = null;
+function persistSettings() { // fire-and-forget, léger debounce
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => storage.saveSettings(currentSettings()).catch(() => {}), 300);
+}
 
 // Map { pid -> avatar } envoyée une seule fois aux nouveaux arrivants (jamais dans les broadcasts d'état)
 const avatarMap = () => {
@@ -55,7 +77,7 @@ const avatarMap = () => {
   return m;
 };
 
-const newQ = (text, answerRaw) => ({ id: game.nextQid++, text, answerRaw });
+const newQ = (text, answerRaw, kind = 'choice') => ({ id: game.nextQid++, text, answerRaw, kind });
 const qById = id => game.questions.find(q => q.id === id);
 const isPlayed = id => Object.prototype.hasOwnProperty.call(game.results, id);
 
@@ -66,6 +88,10 @@ const fold = s => String(s ?? '').trim().toLowerCase().normalize('NFD').replace(
 // les prénoms des mariés après l'import ne casse pas la correspondance.
 function resolveAnswer(q) {
   if (!q) return null;
+  if (q.kind === 'number') {
+    const n = parseFloat(String(q.answerRaw).replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
   const v = fold(q.answerRaw);
   if (!v) return null;
   if (v.includes('deux') || v.includes('both')) return 'both';
@@ -87,9 +113,35 @@ function leaderboard() {
     .map(p => ({ pid: p.pid, name: p.name, score: p.score, time: p.time }));
 }
 
+// Qui a répondu juste le plus vite (questions à choix) — pour la mise en scène du reveal
+function fastestCorrect() {
+  const res = game.results[game.current];
+  if (!res || res.kind !== 'choice') return null;
+  let best = null;
+  for (const [token, a] of res.answers) {
+    if (a.pts > 0 && (!best || a.ms < best.ms)) {
+      const p = game.players.get(token);
+      if (p) best = { pid: p.pid, name: p.name, ms: a.ms };
+    }
+  }
+  return best;
+}
+
+// Estimations les plus proches de la cible (questions numériques) — top 5 par points
+function closestGuesses() {
+  const res = game.results[game.current];
+  if (!res || res.kind !== 'number') return null;
+  return [...res.answers.entries()]
+    .map(([token, a]) => { const p = game.players.get(token); return p ? { pid: p.pid, name: p.name, value: a.value, pts: a.pts } : null; })
+    .filter(Boolean)
+    .sort((x, y) => y.pts - x.pts || x.value - y.value)
+    .slice(0, 5);
+}
+
 function playerState() {
   const curIdx = game.questions.findIndex(q => q.id === game.current); // position 0-based pour l'affichage « X / Y »
   const q = game.questions[curIdx];
+  const kind = q ? q.kind : 'choice';
   const showResults = game.phase === 'reveal' || game.phase === 'ended';
   return {
     phase: game.phase,
@@ -97,9 +149,14 @@ function playerState() {
     index: curIdx,
     total: game.questions.length,
     question: q ? q.text : null,
+    kind,
+    duration: game.duration,
+    deadline: game.deadline,
     correct: showResults ? game.correct : null,
     counts: showResults ? game.counts : null,
     leaderboard: showResults ? leaderboard() : null,
+    fastest: showResults ? fastestCorrect() : null,
+    closest: showResults ? closestGuesses() : null,
     playerCount: game.players.size,
   };
 }
@@ -110,7 +167,7 @@ function adminState() {
     ...playerState(),
     leaderboard: leaderboard(),
     questions: game.questions.map(q => ({
-      id: q.id, text: q.text, answer: resolveAnswer(q),
+      id: q.id, text: q.text, answer: resolveAnswer(q), kind: q.kind,
       played: isPlayed(q.id), current: q.id === game.current,
     })),
     playedCount,
@@ -131,7 +188,7 @@ function gameSnapshot() {
     leaderboard: leaderboard().map(p => ({ name: p.name, score: p.score, time: p.time })),
     questions: Object.keys(game.results).map(id => {
       const q = qById(Number(id));
-      return { text: q ? q.text : '(question supprimée)', correct: game.results[id].correct };
+      return { text: q ? q.text : '(question supprimée)', correct: game.results[id].correct, kind: game.results[id].kind };
     }),
   };
 }
@@ -177,29 +234,35 @@ function ingest(wb) {
     start = 1;
   }
 
+  const isNumeric = s => s !== '' && /^\s*-?\d+([.,]\d+)?\s*$/.test(s) && Number.isFinite(parseFloat(s.replace(',', '.')));
   const questions = raw.slice(start).map(r => {
     const b1 = bool(r[1]), b2 = bool(r[2]);
-    const answerRaw = (b1 !== null && b2 !== null)
-      ? (b1 && b2 ? 'les deux' : b1 ? 'a' : b2 ? 'b' : '') // FALSE/FALSE → validation en direct
-      : r[1];
-    return newQ(r[0], answerRaw);
+    if (b1 !== null && b2 !== null) { // format TRUE/FALSE → choix
+      return newQ(r[0], b1 && b2 ? 'les deux' : b1 ? 'a' : b2 ? 'b' : '', 'choice');
+    }
+    // colonne B purement numérique → question d'estimation « le plus proche gagne »
+    if (isNumeric(r[1])) return newQ(r[0], r[1].trim(), 'number');
+    return newQ(r[0], r[1], 'choice');
   });
   if (!questions.length) throw new Error('Aucune question trouvée (la colonne A est-elle remplie ?)');
 
   game.questions = questions;
   resetProgress();
+  persistSettings();
   broadcast();
   return questions.length;
 }
 
 // Remet à zéro la progression (questions jouées, question active) sans toucher aux scores
 function resetProgress() {
+  clearTimeout(revealTimer);
   game.current = null;
   game.phase = 'lobby';
   game.answers = new Map();
   game.correct = null;
   game.counts = null;
   game.results = {};
+  game.deadline = 0;
 }
 
 app.post('/admin/upload', upload.single('file'), (req, res) => {
@@ -259,9 +322,10 @@ io.on('connection', socket => {
     socket.data.token = token;
     socket.join('players');
     socket.join('player:' + token); // salle dédiée pour pouvoir cibler ce joueur (ex. expulsion)
+    const ans = game.answers.get(token);
     cb && cb({
       state: playerState(),
-      you: { pid: p.pid, name: p.name, score: p.score, choice: game.answers.get(token)?.choice ?? null },
+      you: { pid: p.pid, name: p.name, score: p.score, choice: ans?.choice ?? null, value: ans?.value ?? null },
       avatars: avatarMap(),
       theme: game.theme,
     });
@@ -283,9 +347,17 @@ io.on('connection', socket => {
   socket.on('answer', (choice, cb) => {
     const token = socket.data.token;
     if (!token || game.phase !== 'question') return;
-    if (!['a', 'b', 'both'].includes(choice)) return;
+    if (game.deadline && Date.now() > game.deadline) return; // temps écoulé : vote clos
     if (game.answers.has(token)) return; // une seule réponse, définitive
-    game.answers.set(token, { choice, ms: Date.now() - game.startedAt });
+    const q = qById(game.current);
+    if (q && q.kind === 'number') {
+      const v = parseFloat(String(choice).replace(',', '.'));
+      if (!Number.isFinite(v)) return;
+      game.answers.set(token, { value: v, ms: Date.now() - game.startedAt });
+    } else {
+      if (!['a', 'b', 'both'].includes(choice)) return;
+      game.answers.set(token, { choice, ms: Date.now() - game.startedAt });
+    }
     cb && cb({ ok: true });
     broadcast();
   });
@@ -309,7 +381,16 @@ io.on('connection', socket => {
   // Habillage partagé (doré ⇄ forestier) : appliqué en direct sur tous les écrans
   socket.on('admin:setTheme', admin(t => {
     game.theme = t === 'forest' ? 'forest' : 'gold';
+    persistSettings();
     io.emit('theme:set', game.theme); // joueurs, classement, régie
+  }));
+
+  // Durée du minuteur par question (secondes ; 0 = pas de minuteur, révélation manuelle)
+  socket.on('admin:setDuration', admin(s => {
+    const n = Number(s);
+    game.duration = Number.isFinite(n) && n >= 0 && n <= 120 ? Math.round(n) : 0;
+    persistSettings();
+    broadcast();
   }));
 
   socket.on('admin:couple', admin(data => {
@@ -317,14 +398,21 @@ io.on('connection', socket => {
       a: String(data?.a || '').trim().slice(0, 24) || 'Marié·e A',
       b: String(data?.b || '').trim().slice(0, 24) || 'Marié·e B',
     };
+    persistSettings();
     broadcast();
   }));
 
   socket.on('admin:addQuestion', admin(data => {
     const text = String(data?.text || '').trim();
     if (!text) return;
-    const map = { a: 'a', b: 'b', both: 'les deux' };
-    game.questions.push(newQ(text, map[data?.answer] || ''));
+    if (data?.answer === 'number') { // question d'estimation
+      const v = parseFloat(String(data?.value).replace(',', '.'));
+      game.questions.push(newQ(text, Number.isFinite(v) ? String(v) : '', 'number'));
+    } else {
+      const map = { a: 'a', b: 'b', both: 'les deux' };
+      game.questions.push(newQ(text, map[data?.answer] || '', 'choice'));
+    }
+    persistSettings();
     broadcast();
   }));
 
@@ -333,6 +421,7 @@ io.on('connection', socket => {
     // on ne peut supprimer ni la question en cours ni une question déjà jouée
     if (!qById(id) || id === game.current || isPlayed(id)) return;
     game.questions = game.questions.filter(q => q.id !== id);
+    persistSettings();
     broadcast();
   }));
 
@@ -340,6 +429,7 @@ io.on('connection', socket => {
   socket.on('admin:clearQuestions', admin(() => {
     game.questions = [];
     resetProgress();
+    persistSettings();
     broadcast();
   }));
 
@@ -352,6 +442,55 @@ io.on('connection', socket => {
     game.correct = null;
     game.counts = null;
     game.startedAt = Date.now();
+    game.deadline = game.duration > 0 ? game.startedAt + game.duration * 1000 : 0;
+    clearTimeout(revealTimer);
+    if (game.deadline) revealTimer = setTimeout(() => autoReveal(id), game.duration * 1000);
+    broadcast();
+  }
+
+  // Échéance atteinte : on révèle si la réponse est connue (Excel/estimation) ;
+  // pour une question « en direct » sans réponse, le vote est clos et l'admin tranche.
+  function autoReveal(id) {
+    if (game.current !== id || game.phase !== 'question') return;
+    const auto = resolveAnswer(qById(id));
+    if (auto !== null && auto !== undefined) doReveal(auto);
+    else broadcast(); // rafraîchit l'UI (vote clos), en attente du choix admin
+  }
+
+  // Fige la question : calcule les points et mémorise pour permettre l'invalidation.
+  function doReveal(correct) {
+    if (game.phase !== 'question') return;
+    clearTimeout(revealTimer);
+    const q = qById(game.current);
+    const kind = q ? q.kind : 'choice';
+    const stored = new Map();
+    if (kind === 'number') {
+      // rang par écart absolu à la cible (départage : plus rapide) → points dégressifs, plancher 300
+      const ranked = [...game.answers.entries()]
+        .filter(([, a]) => typeof a.value === 'number')
+        .sort((A, B) => Math.abs(A[1].value - correct) - Math.abs(B[1].value - correct) || A[1].ms - B[1].ms);
+      ranked.forEach(([token, a], rank) => {
+        const pts = Math.max(300, 1000 - rank * 200);
+        const p = game.players.get(token);
+        if (p) { p.score += pts; p.time += a.ms; }
+        stored.set(token, { value: a.value, ms: a.ms, pts });
+      });
+    } else {
+      for (const [token, a] of game.answers) {
+        let pts = 0;
+        if (a.choice === correct) {
+          pts = speedPoints(a.ms);
+          const p = game.players.get(token);
+          if (p) { p.score += pts; p.time += a.ms; }
+        }
+        stored.set(token, { choice: a.choice, ms: a.ms, pts });
+      }
+    }
+    game.correct = correct;
+    game.counts = currentCounts();
+    game.results[game.current] = { correct, kind, answers: stored };
+    game.phase = 'reveal';
+    game.deadline = 0;
     broadcast();
   }
 
@@ -365,44 +504,40 @@ io.on('connection', socket => {
 
   socket.on('admin:reveal', admin(choice => {
     if (game.phase !== 'question') return;
-    const correct = ['a', 'b', 'both'].includes(choice) ? choice : resolveAnswer(qById(game.current));
-    if (!correct) return; // pas de réponse en base : l'admin doit en choisir une
-    game.correct = correct;
-    game.counts = currentCounts();
-    for (const [token, ans] of game.answers) {
-      const p = game.players.get(token);
-      if (p && ans.choice === correct) {
-        p.score += 1;
-        p.time += ans.ms;
-      }
+    const q = qById(game.current);
+    if (q && q.kind === 'number') { // estimation : cible connue, le choix admin est ignoré
+      const target = resolveAnswer(q);
+      if (target === null) return;
+      return doReveal(target);
     }
-    // mémorise le résultat pour pouvoir l'annuler plus tard
-    game.results[game.current] = { correct, answers: new Map(game.answers) };
-    game.phase = 'reveal';
-    broadcast();
+    const correct = ['a', 'b', 'both'].includes(choice) ? choice : resolveAnswer(q);
+    if (!correct) return; // pas de réponse en base : l'admin doit en choisir une
+    doReveal(correct);
   }));
 
   // Annule la question EN COURS avant révélation : réponses jetées, aucun point, retour au lobby
   socket.on('admin:cancelCurrent', admin(() => {
     if (game.phase !== 'question') return;
+    clearTimeout(revealTimer);
     game.current = null;
     game.phase = 'lobby';
     game.answers = new Map();
     game.correct = null;
     game.counts = null;
+    game.deadline = 0;
     broadcast();
   }));
 
-  // Invalide une question DÉJÀ RÉVÉLÉE : retire les points qu'elle avait attribués
+  // Invalide une question DÉJÀ RÉVÉLÉE : retire les points qu'elle avait attribués (montant exact stocké)
   socket.on('admin:invalidate', admin(id => {
     id = Number(id);
     const res = game.results[id];
     if (!res) return;
-    for (const [token, ans] of res.answers) {
+    for (const [token, a] of res.answers) {
       const p = game.players.get(token);
-      if (p && ans.choice === res.correct) {
-        p.score = Math.max(0, p.score - 1);
-        p.time = Math.max(0, p.time - ans.ms);
+      if (p && a.pts) {
+        p.score = Math.max(0, p.score - a.pts);
+        p.time = Math.max(0, p.time - a.ms);
       }
     }
     delete game.results[id];
@@ -471,4 +606,18 @@ io.on('connection', socket => {
   }));
 });
 
-server.listen(PORT, () => console.log(`Jeu des mariés prêt sur le port ${PORT} — admin sur /admin`));
+// Restaure les réglages persistés (couple, thème, durée, questions) puis démarre.
+// Non bloquant en cas d'erreur de stockage : on démarre quand même avec les valeurs par défaut.
+storage.loadSettings()
+  .then(s => {
+    if (!s) return;
+    if (s.theme) game.theme = s.theme;
+    if (typeof s.duration === 'number') game.duration = s.duration;
+    if (s.couple && s.couple.a && s.couple.b) game.couple = s.couple;
+    if (Array.isArray(s.questions)) {
+      game.questions = s.questions.map(q => ({ kind: 'choice', ...q })); // compat anciens réglages
+      if (typeof s.nextQid === 'number') game.nextQid = Math.max(s.nextQid, ...game.questions.map(q => q.id + 1), 1);
+    }
+  })
+  .catch(() => {})
+  .finally(() => server.listen(PORT, () => console.log(`Jeu des mariés prêt sur le port ${PORT} — admin sur /admin`)));

@@ -18,13 +18,42 @@ if (DB_URL) {
     couple_b text,
     player_count int,
     data jsonb NOT NULL
-  )`);
+  )`).then(() => pool.query(`CREATE TABLE IF NOT EXISTS settings (
+    id int PRIMARY KEY,
+    data jsonb NOT NULL
+  )`));
 }
 
 // --- Repli fichier JSON ---
 const FILE = path.join(__dirname, 'data', 'games.json');
 const readFile = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return []; } };
 const writeFile = arr => { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(arr)); };
+
+// --- Réglages persistants (couple, thème, durée, questions) ---
+// Durable seulement avec DATABASE_URL sur Render gratuit ; sinon fichier local éphémère là-bas.
+const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
+
+async function saveSettings(obj) {
+  if (pool) {
+    await ready;
+    await pool.query(
+      'INSERT INTO settings (id, data) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET data = $1',
+      [obj],
+    );
+    return;
+  }
+  fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(obj));
+}
+
+async function loadSettings() {
+  if (pool) {
+    await ready;
+    const r = await pool.query('SELECT data FROM settings WHERE id = 1');
+    return r.rows.length ? r.rows[0].data : null;
+  }
+  try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return null; }
+}
 
 async function saveGame(rec) {
   if (pool) {
@@ -69,4 +98,4 @@ async function deleteGame(id) {
   writeFile(readFile().filter(g => g.id !== id));
 }
 
-module.exports = { saveGame, listGames, getGame, deleteGame, usingDb: !!pool };
+module.exports = { saveGame, listGames, getGame, deleteGame, saveSettings, loadSettings, usingDb: !!pool };

@@ -226,12 +226,13 @@ function ingest(wb) {
   const isBoolRow = r => bool(r[1]) !== null && bool(r[2]) !== null;
   const hasBoolRows = raw.some(isBoolRow);
 
-  let start = 0;
+  let start = 0, coupleFromHeader = false;
   if (fold(raw[0][0]).startsWith('question')) {
     start = 1; // en-tête « Question | Réponse »
   } else if (hasBoolRows && !isBoolRow(raw[0]) && raw[0][1] && raw[0][2]) {
     // en-tête du format TRUE/FALSE : les colonnes B et C portent les prénoms des mariés
     game.couple = { a: raw[0][1].slice(0, 24), b: raw[0][2].slice(0, 24) };
+    coupleFromHeader = true;
     start = 1;
   }
 
@@ -246,6 +247,22 @@ function ingest(wb) {
     return newQ(r[0], r[1], 'choice');
   });
   if (!questions.length) throw new Error('Aucune question trouvée (la colonne A est-elle remplie ?)');
+
+  // Format « Question | Réponse » : déduire les prénoms des mariés depuis la colonne réponse
+  // (les 2 premiers prénoms distincts rencontrés). Sinon les réponses « Camille »/« Jules » ne
+  // résolvent pas et tout tombe en « validation en direct ».
+  if (!coupleFromHeader) {
+    const seen = new Map(); // prénom normalisé -> affichage (1re occurrence)
+    for (const q of questions) {
+      if (q.kind !== 'choice') continue;
+      const disp = String(q.answerRaw).trim();
+      const f = fold(disp);
+      if (!f || f.includes('deux') || f.includes('both') || ['a', 'b', '1', '2'].includes(f)) continue;
+      if (!seen.has(f)) seen.set(f, disp);
+    }
+    const names = [...seen.values()];
+    if (names.length >= 2) game.couple = { a: names[0].slice(0, 24), b: names[1].slice(0, 24) };
+  }
 
   game.questions = questions;
   resetProgress();

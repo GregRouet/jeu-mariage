@@ -26,6 +26,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   assert(badLogin.error, 'login admin refusé avec mauvais mot de passe');
   const login = await emit(admin, 'admin:login', 'mariage');
   assert(login.state, 'login admin accepté');
+  assert(login.state.couple.a === 'Camille' && login.state.couple.b === 'Jules',
+    'prénoms des mariés auto-détectés depuis la colonne réponse (Camille & Jules)');
   let adminState = login.state;
   admin.on('state', s => adminState = s);
 

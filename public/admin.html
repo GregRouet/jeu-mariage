@@ -292,6 +292,13 @@
           <button type="button" class="btn ghost" id="themeForest" data-theme="forest" style="flex:1">Forestier</button>
         </div>
         <hr style="border:none;border-top:1px dashed var(--line);margin:0 0 16px">
+        <label>Minuteur par question (secondes — 0 = pas de minuteur, révélation manuelle)</label>
+        <div class="row" style="margin-bottom:16px">
+          <input type="number" id="durationInput" min="0" max="120" step="5" placeholder="0" style="flex:1">
+          <button class="btn ghost" id="saveDuration">Régler</button>
+        </div>
+        <div class="status" id="durationStatus"></div>
+        <hr style="border:none;border-top:1px dashed var(--line);margin:0 0 16px">
         <div class="row">
           <div><label>Marié·e 1</label><input type="text" id="nameA" maxlength="24"></div>
           <div><label>Marié·e 2</label><input type="text" id="nameB" maxlength="24"></div>
@@ -323,7 +330,9 @@
             <option value="b" id="optB"></option>
             <option value="both">Les deux</option>
             <option value="">En direct</option>
+            <option value="number">Estimation (nombre)</option>
           </select>
+          <input type="number" id="newQValue" step="any" placeholder="Cible" style="flex:1;display:none">
           <button class="btn ghost" id="addQBtn">Ajouter</button>
         </div>
         <div class="status" id="addQStatus"></div>
@@ -499,8 +508,8 @@
 
   // Export d'un classement en CSV (séparateur ; + BOM pour Excel/accents)
   function downloadCsv(couple, lb) {
-    const rows = [['Rang', 'Nom', 'Points', 'Temps moyen (s/question)']];
-    lb.forEach((p, i) => rows.push([i + 1, p.name, p.score, p.score > 0 ? (p.time / p.score / 1000).toFixed(1) : '']));
+    const rows = [['Rang', 'Nom', 'Points']];
+    lb.forEach((p, i) => rows.push([i + 1, p.name, p.score]));
     const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -549,7 +558,7 @@
       $('modalSub').textContent = fmtDate(g.savedAt) + ' — ' + g.leaderboard.length + ' joueurs, ' + (g.questions ? g.questions.length : 0) + ' questions';
       $('modalLb').innerHTML = g.leaderboard.map((p, i) =>
         '<li class="' + (i < 3 ? 'top' : '') + '"><span class="r">' + (i + 1) + '</span><span>' + esc(p.name) + '</span>' +
-        '<span class="p">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + (p.score > 0 ? ' · ' + (p.time / p.score / 1000).toFixed(1) + 's/q' : '') + '</small></span></li>'
+        '<span class="p">' + p.score + ' <small>pts</small></span></li>'
       ).join('');
       $('modalCsv').onclick = () => downloadCsv(g.couple, g.leaderboard);
       $('gameModal').classList.remove('hidden');
@@ -577,6 +586,7 @@
       ? 'Stockage : base externe (durable ✦)'
       : 'Stockage : fichier local — non durable sur Render gratuit (définis DATABASE_URL)';
     $('storageNote').className = 'status ' + (state.storageDurable ? 'ok' : 'err');
+    if (document.activeElement !== $('durationInput')) $('durationInput').value = state.duration || 0;
     renderStage();
     renderActionBar();
     renderQuestions();
@@ -594,7 +604,7 @@
     if (phase === 'lobby') html = total ? nextOrEnd : '';
     else if (phase === 'question') {
       const q = currentQ();
-      html = (q && q.answer)
+      html = (q && (q.kind === 'number' || q.answer))
         ? '<button class="btn gold" onclick="socket.emit(\'admin:reveal\')">Révéler ✓</button>'
         : '<button class="btn" onclick="reveal(\'a\')">' + esc(couple.a) + '</button>' +
           '<button class="btn" onclick="reveal(\'b\')">' + esc(couple.b) + '</button>' +
@@ -626,7 +636,7 @@
 
     } else if (phase === 'question') {
       const q = currentQ();
-      const auto = q && q.answer;
+      const auto = q && (q.kind === 'number' || q.answer);
       el.innerHTML =
         '<div class="stage-num">Question en cours</div>' +
         '<div class="stage-q">' + esc(question) + '</div>' +
@@ -645,7 +655,7 @@
       el.innerHTML =
         '<div class="stage-num">Réponse : ' + esc(answerLabel(state.correct)) + '</div>' +
         '<div class="stage-q">' + esc(question) + '</div>' +
-        distHtml() +
+        (state.kind === 'number' ? closestHtml() : distHtml()) +
         (allPlayed ? endBtn : nextBtn) +
         (q ? '<button class="btn danger" style="width:100%;margin-top:10px" onclick="invalidateQ(' + q.id + ')">↩ Invalider cette question (retirer les points)</button>' : '');
 
@@ -669,7 +679,17 @@
   }
 
   function answerLabel(a) {
+    if (typeof a === 'number') return String(a);
     return a === 'a' ? state.couple.a : a === 'b' ? state.couple.b : a === 'both' ? 'Les deux' : '';
+  }
+
+  // Liste des estimations les plus proches (reveal d'une question numérique)
+  function closestHtml() {
+    const list = state.closest || [];
+    if (!list.length) return '<p class="muted">Aucune estimation reçue.</p>';
+    return '<ol class="qlist">' + list.map((c, i) =>
+      '<li' + (i === 0 ? ' class="now"' : '') + '><span style="width:22px;text-align:center">' + (i + 1) + '</span>' +
+      '<span style="flex:1">' + esc(c.name) + '</span><span class="chip">' + esc(String(c.value)) + ' · +' + c.pts + '</span></li>').join('') + '</ol>';
   }
 
   function renderQuestions() {
@@ -678,7 +698,9 @@
     if (!qs.length) { $('qlist').innerHTML = '<div class="muted">Aucune question importée</div>'; return; }
     $('qlist').innerHTML = qs.map((q, i) => {
       const cls = q.played ? 'done' : q.current ? 'now' : '';
-      const chip = '<span class="chip' + (q.answer ? '' : ' live') + '">' + (q.answer ? esc(answerLabel(q.answer)) : 'en direct') + '</span>';
+      const isLive = q.kind !== 'number' && !q.answer;
+      const chip = '<span class="chip' + (isLive ? ' live' : '') + '">' +
+        (q.kind === 'number' ? '≈ ' + esc(String(q.answer)) : (q.answer ? esc(answerLabel(q.answer)) : 'en direct')) + '</span>';
       let action;
       if (q.current) action = '<span class="pin" title="En cours">●</span>';
       else if (q.played) action = '<button class="qdel" style="color:var(--ink-soft)" title="Invalider (retirer les points)" onclick="invalidateQ(' + q.id + ')">↩</button>';
@@ -715,14 +737,26 @@
     if (confirm('Annuler la question en cours ? Les réponses reçues seront jetées, aucun point attribué.')) socket.emit('admin:cancelCurrent');
   }
 
+  // Champ « cible » visible seulement pour une question d'estimation
+  $('newQAnswer').addEventListener('change', () => {
+    $('newQValue').style.display = $('newQAnswer').value === 'number' ? '' : 'none';
+  });
   $('addQBtn').onclick = () => {
     const text = $('newQText').value.trim();
     if (!text) { flash($('addQStatus'), 'Écris d’abord la question', 'err'); return; }
-    socket.emit('admin:addQuestion', { text, answer: $('newQAnswer').value });
-    $('newQText').value = '';
+    const answer = $('newQAnswer').value;
+    if (answer === 'number' && !$('newQValue').value.trim()) { flash($('addQStatus'), 'Indique la valeur cible', 'err'); return; }
+    socket.emit('admin:addQuestion', { text, answer, value: $('newQValue').value });
+    $('newQText').value = ''; $('newQValue').value = '';
     flash($('addQStatus'), 'Question ajoutée en fin de liste ✦', 'ok');
   };
   $('newQText').addEventListener('keydown', e => { if (e.key === 'Enter') $('addQBtn').click(); });
+
+  // Minuteur par question
+  $('saveDuration').onclick = () => {
+    socket.emit('admin:setDuration', $('durationInput').value);
+    flash($('durationStatus'), 'Minuteur réglé ✦', 'ok');
+  };
 
   function renderPlayers() {
     const ps = state.players || [];
@@ -731,8 +765,7 @@
     $('plist').innerHTML = ps.map(p =>
       '<li><span class="dot' + (p.answered ? ' on' : '') + '"></span>' +
       avHtml(p) +
-      '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pt' + (p.score > 1 ? 's' : '') +
-      (p.score > 0 ? ' · ' + (p.time / p.score / 1000).toFixed(1) + 's/q' : '') + '</span>' +
+      '<span>' + esc(p.name) + '</span><span class="pts">' + p.score + ' pts</span>' +
       '<button class="pdel" title="Supprimer" onclick="delPlayer(\'' + p.token + '\', \'' + esc(p.name).replace(/'/g, "\\'") + '\')">✕</button></li>'
     ).join('');
   }

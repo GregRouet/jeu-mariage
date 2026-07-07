@@ -171,6 +171,22 @@
     box-shadow: inset 0 0 0 3px var(--surface-dark), inset 0 0 0 4px var(--gold-soft), 0 0 24px -6px var(--gold-soft);
   }
   .choice:disabled { cursor: default; }
+
+  /* Estimation : saisie numérique */
+  .numguess { display: flex; flex-direction: column; gap: 14px; }
+  .numguess input {
+    font-family: 'Cormorant Garamond', serif; font-size: 34px; text-align: center; color: var(--ink);
+    background: rgba(255,253,247,.7); border: 1px solid var(--gold-soft);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--line);
+    padding: 18px 14px; width: 100%; outline: none; -moz-appearance: textfield;
+  }
+  .numguess input:focus { border-color: var(--gold); }
+
+  /* Compte à rebours */
+  .timer { margin-top: 22px; }
+  .timer .ptrack { height: 8px; background: var(--paper-deep); border: 1px solid var(--line); overflow: hidden; }
+  .timer .pfill { height: 100%; width: 100%; background: var(--gold); transition: width .25s linear; }
+  .timer.low .pfill { background: var(--blush); }
   .locked {
     text-align: center; margin-top: 22px; font-size: 12px;
     letter-spacing: .25em; text-transform: uppercase; color: var(--gold);
@@ -255,7 +271,6 @@
   .pod.p1 { animation-delay: .25s; } .pod.p2 { animation-delay: .1s; } .pod.p3 { animation-delay: .4s; }
   .pod.p1 .pname { font-size: 20px; color: var(--gold); }
   .crown { font-size: 20px; }
-  .pod .ptime { margin-top: 6px; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .pod .av { width: 52px; height: 52px; margin: 0 auto 8px; font-size: 18px; }
   .pod .av.heart { font-size: 30px; }
   .pod.p1 .av { width: 64px; height: 64px; border-color: var(--gold); border-width: 2px; }
@@ -322,11 +337,16 @@
   <section class="screen" id="s-question">
     <div class="qnum" id="qnum">✦</div>
     <div class="qtext" id="qtext"></div>
-    <div class="choices">
+    <div class="choices" id="choiceBtns">
       <button class="choice" data-choice="a" id="chA"></button>
       <button class="choice" data-choice="b" id="chB"></button>
       <button class="choice" data-choice="both">Les deux !</button>
     </div>
+    <div class="numguess" id="numGuess" style="display:none">
+      <input type="number" inputmode="decimal" step="any" id="numInput" placeholder="Ton estimation">
+      <button class="btn" id="numSend">Valider mon estimation</button>
+    </div>
+    <div class="timer" id="pTimer" style="display:none"><div class="ptrack"><div class="pfill" id="pTimerFill"></div></div></div>
     <div class="locked" id="lockedMsg" style="display:none">✦ Réponse enregistrée ✦</div>
   </section>
 
@@ -361,7 +381,8 @@
   let myName = localStorage.getItem('jm_name') || '';
 
   let state = null;
-  let myChoice = null;     // choix pour la question en cours
+  let myChoice = null;     // choix (a/b/both) pour la question en cours
+  let myValue = null;      // estimation (nombre) pour la question en cours
   let myScore = 0;
   let myPid = null;
   let joined = false;
@@ -385,6 +406,7 @@
       myName = res.you.name;
       myScore = res.you.score;
       myChoice = res.you.choice;
+      myValue = res.you.value;
       myPid = res.you.pid;
       Object.assign(avatars, res.avatars || {});
       applyTheme(res.theme);
@@ -448,7 +470,7 @@
   socket.on('state', s => {
     const newQuestion = state && (s.index !== state.index || (s.phase === 'question' && state.phase !== 'question'));
     state = s;
-    if (newQuestion && s.phase === 'question') myChoice = null;
+    if (newQuestion && s.phase === 'question') { myChoice = null; myValue = null; }
     render();
   });
 
@@ -478,11 +500,24 @@
     };
   });
 
+  // Envoi d'une estimation (question numérique)
+  function sendGuess() {
+    if (!state || state.phase !== 'question' || myValue != null) return;
+    const v = parseFloat($('numInput').value.trim().replace(',', '.'));
+    if (!Number.isFinite(v)) { $('numInput').focus(); return; }
+    myValue = v;
+    socket.emit('answer', v);
+    render();
+  }
+  $('numSend').onclick = sendGuess;
+  $('numInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendGuess(); });
+
   function render() {
     if (!state || !joined) return;
     const { couple } = state;
     $('coupleNames').innerHTML = esc(couple.a) + ' <em>&amp;</em> ' + esc(couple.b);
     document.title = couple.a + ' & ' + couple.b;
+    if (state.phase !== 'question') stopPlayerTimer();
 
     if (state.phase === 'lobby') {
       $('waitTitle').textContent = 'Bienvenue, ' + myName + ' !';
@@ -491,32 +526,53 @@
       show('s-wait');
 
     } else if (state.phase === 'question') {
-      $('qnum').textContent = '✦';
+      const isNum = state.kind === 'number';
+      const answered = isNum ? myValue != null : !!myChoice;
+      $('qnum').textContent = isNum ? '№' : '✦';
       $('qtext').textContent = state.question;
-      $('chA').textContent = couple.a;
-      $('chB').textContent = couple.b;
-      document.querySelectorAll('.choice').forEach(b => {
-        b.classList.toggle('sel', b.dataset.choice === myChoice);
-        b.classList.toggle('dim', !!myChoice && b.dataset.choice !== myChoice);
-        b.classList.remove('good');
-      });
-      $('lockedMsg').style.display = myChoice ? '' : 'none';
+      if (isNum) {
+        $('choiceBtns').style.display = 'none';
+        $('numGuess').style.display = answered ? 'none' : '';
+      } else {
+        $('numGuess').style.display = 'none';
+        $('choiceBtns').style.display = '';
+        $('chA').textContent = couple.a;
+        $('chB').textContent = couple.b;
+        document.querySelectorAll('.choice').forEach(b => {
+          b.classList.toggle('sel', b.dataset.choice === myChoice);
+          b.classList.toggle('dim', !!myChoice && b.dataset.choice !== myChoice);
+          b.classList.remove('good');
+        });
+      }
+      $('lockedMsg').textContent = answered && isNum ? '✦ Estimation : ' + myValue + ' ✦' : '✦ Réponse enregistrée ✦';
+      $('lockedMsg').style.display = answered ? '' : 'none';
+      playerTimer();
       show('s-question');
 
     } else if (state.phase === 'reveal') {
-      const ok = myChoice === state.correct;
-      const label = state.correct === 'both' ? 'Les deux !' : couple[state.correct];
-      if (myChoice) {
-        if (ok) myScoreSync();
-        $('verdict').textContent = ok ? 'Bonne réponse !' : 'Raté…';
-        $('verdict').className = 'verdict ' + (ok ? 'ok' : 'ko');
-        $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>' + (ok ? ' — +1 point ✦' : '');
+      myScoreSync();
+      if (state.kind === 'number') {
+        const target = state.correct;
+        $('verdict').textContent = 'Réponse : ' + target;
+        $('verdict').className = 'verdict ok';
+        $('verdictSub').innerHTML = myValue != null
+          ? 'Ton estimation : <b>' + esc(String(myValue)) + '</b> — à ' + (Math.round(Math.abs(myValue - target) * 100) / 100) + ' de la cible'
+          : 'Tu n’as pas estimé cette fois';
+        $('bars').innerHTML = closestHtml();
       } else {
-        $('verdict').textContent = 'Trop tard !';
-        $('verdict').className = 'verdict ko';
-        $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>';
+        const ok = myChoice === state.correct;
+        const label = state.correct === 'both' ? 'Les deux !' : couple[state.correct];
+        if (myChoice) {
+          $('verdict').textContent = ok ? 'Bonne réponse !' : 'Raté…';
+          $('verdict').className = 'verdict ' + (ok ? 'ok' : 'ko');
+          $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>' + (ok ? ' ✦' : '');
+        } else {
+          $('verdict').textContent = 'Trop tard !';
+          $('verdict').className = 'verdict ko';
+          $('verdictSub').innerHTML = 'La réponse était <b>' + esc(label) + '</b>';
+        }
+        renderBars();
       }
-      renderBars();
       renderLb($('lbList'), state.leaderboard, 8);
       show('s-reveal');
 
@@ -525,6 +581,35 @@
       renderLb($('lbFinal'), state.leaderboard, 999);
       show('s-end');
     }
+  }
+
+  // Estimations les plus proches (question numérique) — affichées sous la réponse
+  function closestHtml() {
+    const list = state.closest || [];
+    if (!list.length) return '';
+    return '<div class="lb-title">Les plus proches</div><ol class="lb">' + list.map((c, i) =>
+      '<li class="' + (i === 0 ? 'top' : '') + '"><span class="rank">' + (i + 1) + '</span>' + avHtml(c) +
+      '<span>' + esc(c.name) + '</span><span class="pts">' + esc(String(c.value)) + '</span></li>').join('') + '</ol>';
+  }
+
+  // Compte à rebours joueur (corrige la dérive d'horloge via state.now)
+  let pTimerInt = null;
+  function stopPlayerTimer() { if (pTimerInt) { clearInterval(pTimerInt); pTimerInt = null; } }
+  function playerTimer() {
+    stopPlayerTimer();
+    const t = $('pTimer');
+    if (!state.deadline || !state.now || !state.duration) { t.style.display = 'none'; return; }
+    t.style.display = '';
+    const deadlineLocal = Date.now() + (state.deadline - state.now);
+    const total = state.duration * 1000, fill = $('pTimerFill');
+    const tick = () => {
+      const rem = Math.max(0, deadlineLocal - Date.now());
+      fill.style.width = (100 * rem / total) + '%';
+      t.classList.toggle('low', rem < 5000);
+      if (rem <= 0) stopPlayerTimer();
+    };
+    tick();
+    pTimerInt = setInterval(tick, 200);
   }
 
   function myScoreSync() {
@@ -560,11 +645,8 @@
     return '<li class="' + (i < 3 ? 'top ' : '') + (i === myRank ? 'me' : '') + '">' +
       '<span class="rank">' + (i + 1) + '</span>' + avHtml(p) +
       '<span>' + esc(p.name) + '</span>' +
-      '<span class="pts">' + p.score + ' <small>pt' + (p.score > 1 ? 's' : '') + fmtTime(p) + '</small></span></li>';
+      '<span class="pts">' + p.score + ' <small>pts</small></span></li>';
   }
-
-  // Temps MOYEN par bonne réponse (départage les ex æquo) — masqué tant qu'aucun point
-  function fmtTime(p) { return p.score > 0 ? ' · ' + (p.time / p.score / 1000).toFixed(1) + 's/q' : ''; }
 
   // Vignette : photo si disponible, sinon un cœur d'une couleur propre au joueur
   const HEART_COLORS = ['#d2544e','#e08a3c','#caa23c','#7ca85c','#3f9e8f','#4f86c6','#7c6bbf','#b85c9e','#c2785b','#5a9c8f','#a0556a','#6a7fb0'];
@@ -582,8 +664,7 @@
       '<div class="pod ' + cls + '">' + (crown ? '<div class="crown">👑</div>' : '') +
       avHtml(b[i]) +
       '<div class="pname">' + esc(b[i].name) + '</div>' +
-      '<div class="block">' + b[i].score + '<small>POINT' + (b[i].score > 1 ? 'S' : '') + '</small></div>' +
-      (b[i].score > 0 ? '<div class="ptime">' + (b[i].time / b[i].score / 1000).toFixed(1) + 's/q</div>' : '') + '</div>' : '';
+      '<div class="block">' + b[i].score + '<small>PTS</small></div></div>' : '';
     $('podium').innerHTML = pod(1, 'p2') + pod(0, 'p1', true) + pod(2, 'p3');
   }
 

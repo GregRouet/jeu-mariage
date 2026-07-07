@@ -152,6 +152,7 @@ function playerState() {
     kind,
     duration: game.duration,
     deadline: game.deadline,
+    now: Date.now(), // horloge serveur → le client corrige la dérive pour le compte à rebours
     correct: showResults ? game.correct : null,
     counts: showResults ? game.counts : null,
     leaderboard: showResults ? leaderboard() : null,

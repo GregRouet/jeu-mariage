@@ -54,9 +54,11 @@
     box-shadow: 0 30px 80px -30px rgba(0,0,0,.6);
     padding: 14mm;
     display: flex;
+    position: relative; overflow: hidden; /* ancre et rogne les feuillages de coin */
   }
   .frame {
     flex: 1;
+    position: relative; z-index: 1; /* le contenu passe au-dessus des feuillages */
     border: 1px solid var(--gold);
     outline: 1px solid var(--gold-soft);
     outline-offset: 2mm;
@@ -64,6 +66,18 @@
     text-align: center;
     padding: 16mm 12mm 12mm;
   }
+
+  /* Feuillages d'angle (thème forestier uniquement) — PNG à fond transparent, imprimés dans la feuille */
+  .leaf-deco { display: none; }
+  :root[data-theme="forest"] .leaf-deco {
+    display: block; position: absolute; z-index: 0;
+    background-size: contain; background-repeat: no-repeat; opacity: .9; pointer-events: none;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .leaf-deco.tl { top: 0; left: 0;  width: 62mm; height: 54mm; background-image: url('/deco/leaf-tl.png'); background-position: top left; }
+  .leaf-deco.tr { top: 0; right: 0; width: 74mm; height: 33mm; background-image: url('/deco/leaf-tr.png'); background-position: top right; }
+  .leaf-deco.bl { bottom: 0; left: 0;  width: 66mm; height: 43mm; background-image: url('/deco/leaf-bl.png'); background-position: bottom left; }
+  .leaf-deco.br { bottom: 0; right: 0; width: 74mm; height: 37mm; background-image: url('/deco/leaf-br.png'); background-position: bottom right; }
 
   .rule { display: flex; align-items: center; gap: 6mm; justify-content: center; color: var(--gold); width: 100%; }
   .rule::before, .rule::after { content: ''; height: 1px; flex: 1; max-width: 40mm; background: var(--gold-soft); }
@@ -118,6 +132,10 @@
 </div>
 
 <div class="sheet">
+  <div class="leaf-deco tl" aria-hidden="true"></div>
+  <div class="leaf-deco tr" aria-hidden="true"></div>
+  <div class="leaf-deco bl" aria-hidden="true"></div>
+  <div class="leaf-deco br" aria-hidden="true"></div>
   <div class="frame">
     <div>
       <div class="rule"><span>✦</span></div>
